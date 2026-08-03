@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Inquilino</title>
+</head>
+<body>
+    <h1>Formulario para Crear Inquilino</h1>
+    <form id="tenantForm" action="http://localhost:3000/tenants" method="POST">
+        <label for="firstName">Nombre:</label>
+        <input type="text" id="firstName" name="firstName" required><br><br>
+
+        <label for="lastName">Apellido:</label>
+        <input type="text" id="lastName" name="lastName" required><br><br>
+
+        <label for="email">Correo Electrónico:</label>
+        <input type="email" id="email" name="email" required><br><br>
+
+        <label for="phone">Teléfono:</label>
+        <input type="tel" id="phone" name="phone" required><br><br>
+
+        <label for="unitId">ID de Unidad:</label>
+        <input type="number" id="unitId" name="unitId" required><br><br>
+
+        <h3>Detalles del Alquiler</h3>
+        <label for="leaseStartDate">Fecha de Inicio:</label>
+        <input type="date" id="leaseStartDate" name="lease.startDate" required><br><br>
+
+        <label for="leaseEndDate">Fecha de Fin:</label>
+        <input type="date" id="leaseEndDate" name="lease.endDate" required><br><br>
+
+        <label for="rentalPrice">Precio de Alquiler:</label>
+        <input type="number" id="rentalPrice" name="lease.rentalPrice" required><br><br>
+
+        <label for="paymentFrequency">Frecuencia de Pago:</label>
+        <select id="paymentFrequency" name="lease.paymentFrequency" required>
+            <option value="MONTHLY">Mensual</option>
+            <option value="YEARLY">Anual</option>
+        </select><br><br>
+
+        <label for="status">Estado:</label>
+        <select id="status" name="lease.status" required>
+            <option value="ACTIVE">Activo</option>
+            <option value="INACTIVE">Inactivo</option>
+        </select><br><br>
+
+        <button type="submit">Crear Inquilino</button>
+    </form>
+</body>
+</html>

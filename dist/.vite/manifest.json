@@ -1,0 +1,23 @@
+{
+  "index.html": {
+    "file": "assets/index-B3fK21wY.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "css": [
+      "assets/index-BsMV2wvZ.css"
+    ],
+    "assets": [
+      "assets/outfit-latin-ext-wght-normal-5oMg_0D4.woff2",
+      "assets/outfit-latin-wght-normal-CdKZfrg9.woff2"
+    ]
+  },
+  "node_modules/@fontsource-variable/outfit/files/outfit-latin-ext-wght-normal.woff2": {
+    "file": "assets/outfit-latin-ext-wght-normal-5oMg_0D4.woff2",
+    "src": "node_modules/@fontsource-variable/outfit/files/outfit-latin-ext-wght-normal.woff2"
+  },
+  "node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2": {
+    "file": "assets/outfit-latin-wght-normal-CdKZfrg9.woff2",
+    "src": "node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2"
+  }
+}
