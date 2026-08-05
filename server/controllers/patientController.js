@@ -2,8 +2,8 @@ import { AppDataSource } from '../database.js';
 
 export const createPatient = async (req, res) => {
   try {
-    const { nombre, dni, datos_contacto, fecha_nacimiento } = req.body;
-    const professionalId = req.user.userId; 
+    const { nombre, dni, datos_contacto, fecha_nacimiento, professionalIds } = req.body;
+    const professionalId = req.user.userId;
 
     const patientRepo = AppDataSource.getRepository('Patient');
     const newPatient = patientRepo.create({
@@ -11,7 +11,7 @@ export const createPatient = async (req, res) => {
       dni,
       datos_contacto,
       fecha_nacimiento,
-      professional: { id: professionalId }
+      professionals: (req.user.role === 'ADMIN' && professionalIds && professionalIds.length > 0) ? professionalIds.map(id => ({ id })) : [{ id: professionalId }]
     });
 
     await patientRepo.save(newPatient);
@@ -26,8 +26,15 @@ export const getPatients = async (req, res) => {
     const professionalId = req.user.userId;
     const patientRepo = AppDataSource.getRepository('Patient');
     
+    let whereClause = {};
+    if (req.user.role !== 'ADMIN') {
+        whereClause = { professionals: { id: professionalId } };
+    }
+
     const patients = await patientRepo.find({
-      where: { professional: { id: professionalId } }
+      where: whereClause,
+      relations: { professionals: true },
+      order: { createdAt: 'DESC' }
     });
 
     res.json(patients);
@@ -42,8 +49,14 @@ export const getPatientById = async (req, res) => {
     const professionalId = req.user.userId;
     const patientRepo = AppDataSource.getRepository('Patient');
 
+    let whereClause = { id: parseInt(id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professionals = { id: professionalId };
+    }
+
     const patient = await patientRepo.findOne({
-      where: { id: parseInt(id), professional: { id: professionalId } }
+      where: whereClause,
+      relations: { professionals: true }
     });
 
     if (!patient) {
@@ -63,15 +76,27 @@ export const updatePatient = async (req, res) => {
     const updateData = req.body;
     const patientRepo = AppDataSource.getRepository('Patient');
 
+    let whereClause = { id: parseInt(id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professionals = { id: professionalId };
+    }
+
     const patient = await patientRepo.findOne({
-      where: { id: parseInt(id), professional: { id: professionalId } }
+      where: whereClause,
+      relations: { professionals: true }
     });
 
     if (!patient) {
-      return res.status(403).json({ error: 'Forbidden: El paciente no existe o no te pertenece.' });
+      return res.status(403).json({ error: 'Forbidden: El paciente no existe o no tienes permisos para editarlo.' });
     }
 
-    patientRepo.merge(patient, updateData);
+    const { professionalIds, ...restData } = updateData;
+    patientRepo.merge(patient, restData);
+    
+    if (req.user.role === 'ADMIN' && professionalIds && Array.isArray(professionalIds)) {
+        patient.professionals = professionalIds.map(id => ({ id }));
+    }
+    
     await patientRepo.save(patient);
     res.json(patient);
   } catch (error) {
@@ -85,12 +110,17 @@ export const deletePatient = async (req, res) => {
     const professionalId = req.user.userId;
     const patientRepo = AppDataSource.getRepository('Patient');
 
+    let whereClause = { id: parseInt(id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professionals = { id: professionalId };
+    }
+
     const patient = await patientRepo.findOne({
-      where: { id: parseInt(id), professional: { id: professionalId } }
+      where: whereClause
     });
 
     if (!patient) {
-      return res.status(403).json({ error: 'Forbidden: El paciente no existe o no te pertenece.' });
+      return res.status(403).json({ error: 'Forbidden: El paciente no existe o no tienes permisos para eliminarlo.' });
     }
 
     await patientRepo.remove(patient);

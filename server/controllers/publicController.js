@@ -4,12 +4,22 @@ import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import moment from 'moment-timezone';
 import { Between } from 'typeorm';
 import dotenv from 'dotenv';
+import * as whatsappService from '../services/whatsappService.js';
 dotenv.config();
 
 export const getPublicProfessionals = async (req, res) => {
     try {
         const professionals = await userService.getProfessionals();
-        const publicProfessionals = professionals.filter(p => p.is_public === true);
+        const publicProfessionals = professionals
+            .filter(p => p.is_public === true)
+            .map(p => ({
+                id: p.id,
+                name: p.name,
+                specialty: p.specialty,
+                profile_picture: p.profile_picture,
+                session_fee: p.session_fee,
+                require_payment: p.require_payment,
+            }));
         res.status(200).json({ data: publicProfessionals });
     } catch (error) {
         console.error("Error getting public professionals:", error);
@@ -168,7 +178,7 @@ export const createPublicAppointment = async (req, res) => {
         let patient = await patientRepo.findOne({
             where: {
                 nombre: patient_name,
-                professional: { id: profId }
+                professionals: { id: profId }
             }
         });
 
@@ -177,7 +187,7 @@ export const createPublicAppointment = async (req, res) => {
                 nombre: patient_name,
                 email: patient_email,
                 datos_contacto: { telefono: patient_phone, email: patient_email },
-                professional: { id: profId },
+                professionals: [{ id: profId }],
                 status: 'activo'
             });
             patient = await patientRepo.save(patient);
@@ -222,6 +232,23 @@ export const createPublicAppointment = async (req, res) => {
         });
 
         await appointmentRepo.save(newAppointment);
+
+        // --- WHATSAPP INTEGRATION ---
+        if (patient_phone) {
+            if (prof?.whatsapp_connected && prof?.whatsapp_message_template) {
+                let msg = prof.whatsapp_message_template;
+                msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
+                const dateObj = moment(fechaHora);
+                dateObj.locale('es');
+                msg = msg.replace(/{{date}}/g, dateObj.format('DD [de] MMMM'));
+                msg = msg.replace(/{{time}}/g, dateObj.format('HH:mm'));
+                msg = msg.replace(/{{service}}/g, service || 'Turno');
+                msg = msg.replace(/{{professional_name}}/g, prof.name || '');
+
+                whatsappService.sendMessage(prof.id, patient_phone, msg);
+            }
+        }
+        // ----------------------------
 
         // MercadoPago Integration
         if (prof.require_payment && prof.session_fee > 0 && prof.mp_access_token) {

@@ -17,11 +17,15 @@ export const PatientSchema = new EntitySchema({
     status: { type: 'varchar', nullable: true }
   },
   relations: {
-    professional: {
+    professionals: {
       target: 'User',
-      type: 'many-to-one',
-      joinColumn: { name: 'professional_id' },
-      nullable: false
+      type: 'many-to-many',
+      inverseSide: 'patients',
+      joinTable: {
+        name: 'patient_professionals',
+        joinColumn: { name: 'patient_id', referencedColumnName: 'id' },
+        inverseJoinColumn: { name: 'professional_id', referencedColumnName: 'id' }
+      }
     },
     appointments: { target: 'Appointment', type: 'one-to-many', inverseSide: 'patient' },
     medicalHistories: { target: 'MedicalHistory', type: 'one-to-many', inverseSide: 'patient' }

@@ -19,6 +19,13 @@ export async function getUser(req, res) {
 export async function getProfessionals(req, res) {
     try {
         const professionals = await userService.getProfessionals();
+        
+        // Data isolation
+        if (req.user.role !== 'ADMIN') {
+            const myInfo = professionals.find(p => p.id === req.user.userId);
+            return res.status(200).json({ data: myInfo ? [myInfo] : [] });
+        }
+        
         res.status(200).json({ data: professionals });
     } catch (error) {
         console.error("Error in getProfessionals:", error);
@@ -58,6 +65,9 @@ export async function getAllUsers(req, res) {
 }
 
 export async function adminCreateUser(req, res) {
+    if (req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: "No tienes permiso para crear usuarios" });
+    }
     try {
         const newUser = await userService.createUser(req.body);
         res.status(201).json({ message: "User created successfully", data: newUser });
@@ -73,6 +83,12 @@ export async function adminCreateUser(req, res) {
 
 export async function adminUpdateUser(req, res) {
     const { id } = req.params;
+    
+    // Data isolation
+    if (req.user.role !== 'ADMIN' && req.user.userId !== parseInt(id)) {
+        return res.status(403).json({ message: "No tienes permiso para actualizar este usuario" });
+    }
+
     try {
         const updatedUser = await userService.updateUser(parseInt(id), req.body);
         res.status(200).json({ message: "User updated successfully", data: updatedUser });
@@ -83,6 +99,9 @@ export async function adminUpdateUser(req, res) {
 }
 
 export async function adminDeleteUser(req, res) {
+    if (req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: "No tienes permiso para eliminar usuarios" });
+    }
     const { id } = req.params;
     try {
         await userService.deleteUser(parseInt(id));

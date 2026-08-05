@@ -7,6 +7,7 @@ import * as userController from '../controllers/userController.js';
 import * as availabilityController from '../controllers/availabilityController.js';
 import * as mpAuthController from '../controllers/mpAuthController.js';
 import * as transactionController from '../controllers/transactionController.js';
+import * as specialtyController from '../controllers/specialtyController.js';
 
 const router = express.Router();
 
@@ -14,6 +15,12 @@ const router = express.Router();
 router.get('/professionals', authenticateToken, userController.getProfessionals);
 router.post('/professionals', authenticateToken, userController.adminCreateUser);
 router.put('/professionals/:id', authenticateToken, userController.adminUpdateUser);
+
+// Especialidades
+router.get('/specialties', authenticateToken, specialtyController.getSpecialties);
+router.post('/specialties', authenticateToken, specialtyController.createSpecialty);
+router.put('/specialties/:id', authenticateToken, specialtyController.updateSpecialty);
+router.delete('/specialties/:id', authenticateToken, specialtyController.deleteSpecialty);
 
 // Pacientes
 router.post('/patients', authenticateToken, patientController.createPatient);

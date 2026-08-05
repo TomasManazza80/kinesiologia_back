@@ -18,13 +18,18 @@ export async function getProfessionals() {
             { role: 'ADMIN' },
             { role: 'USER' }
         ],
-        select: { id: true, email: true, name: true, specialty: true, role: true, session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true }
+        relations: { patients: true },
+        select: { 
+            id: true, email: true, name: true, specialty: true, role: true, 
+            session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true
+        }
     });
 }
 
 export async function getUserById(id) {
     return getUserRepo().findOne({
         where: { id },
+        relations: { patients: true },
         select: { id: true, email: true, name: true, role: true, specialty: true, session_fee: true, require_payment: true, mp_access_token: true, createdAt: true, updatedAt: true, profile_picture: true, is_public: true }
     });
 }
@@ -70,14 +75,23 @@ export async function updateUserRole(id, role) {
 }
 
 export async function updateUser(id, updateData) {
-    delete updateData.password;
-    delete updateData.id;
-    
-    if (updateData.role) {
-        updateData.role = updateData.role.toUpperCase();
+    const allowedFields = [
+        'name', 'email', 'role', 'specialty', 'session_fee', 
+        'require_payment', 'mp_access_token', 'profile_picture', 'is_public'
+    ];
+
+    const cleanData = {};
+    for (const field of allowedFields) {
+        if (updateData[field] !== undefined) {
+            cleanData[field] = updateData[field];
+        }
+    }
+
+    if (cleanData.role) {
+        cleanData.role = cleanData.role.toUpperCase();
     }
     
-    await getUserRepo().update(id, updateData);
+    await getUserRepo().update(id, cleanData);
     
     return getUserRepo().findOne({
         where: { id },

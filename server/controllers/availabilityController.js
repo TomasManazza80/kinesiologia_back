@@ -2,7 +2,7 @@ import { AppDataSource } from '../database.js';
 
 export const getAvailability = async (req, res) => {
     try {
-        const professionalId = req.query.professional_id ? parseInt(req.query.professional_id) : req.user.userId; // Get requested or logged in professional's ID
+        const professionalId = (req.user.role === 'ADMIN' && req.query.professional_id) ? parseInt(req.query.professional_id) : req.user.userId; // Get requested or logged in professional's ID
 
         const availabilityRepo = AppDataSource.getRepository('Availability');
         const availabilities = await availabilityRepo.find({

@@ -11,6 +11,7 @@ import { MedicalHistorySchema } from './entities/MedicalHistory.js';
 import { TransactionSchema } from './entities/Transaction.js';
 import { TaskSchema } from './entities/Task.js';
 import { AvailabilitySchema } from './entities/Availability.js';
+import { SpecialtySchema } from './entities/Specialty.js';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -31,7 +32,8 @@ export const AppDataSource = new DataSource({
     MedicalHistorySchema,
     TransactionSchema,
     TaskSchema,
-    AvailabilitySchema
+    AvailabilitySchema,
+    SpecialtySchema
   ],
   subscribers: [],
   migrations: [],

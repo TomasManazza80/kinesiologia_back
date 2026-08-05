@@ -2,14 +2,21 @@ import { AppDataSource } from '../database.js';
 
 export const createHistoryEntry = async (req, res) => {
   try {
-    const { patient_id, fecha, diagnostico, tratamiento, evolucion, archivos_adjuntos } = req.body;
+    const { patient_id, fecha, reason_for_visit, blood_pressure, heart_rate, physical_findings, diagnostico, tratamiento, archivos_adjuntos } = req.body;
     const professionalId = req.user.userId;
     
     const patientRepo = AppDataSource.getRepository('Patient');
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
 
+
+
+    let whereClause = { id: parseInt(patient_id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professionals = { id: professionalId };
+    }
+
     const patient = await patientRepo.findOne({
-      where: { id: parseInt(patient_id), professional: { id: professionalId } }
+      where: whereClause
     });
 
     if (!patient) {
@@ -20,9 +27,12 @@ export const createHistoryEntry = async (req, res) => {
       patient: { id: parseInt(patient_id) },
       professional: { id: professionalId },
       fecha: fecha || new Date(),
+      reason_for_visit,
+      blood_pressure,
+      heart_rate,
+      physical_findings,
       diagnostico,
       tratamiento,
-      evolucion,
       archivos_adjuntos
     });
 
@@ -41,16 +51,28 @@ export const getHistoryByPatient = async (req, res) => {
     const patientRepo = AppDataSource.getRepository('Patient');
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
 
+
+
+    let whereClause = { id: parseInt(patient_id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professionals = { id: professionalId };
+    }
+
     const patient = await patientRepo.findOne({
-      where: { id: parseInt(patient_id), professional: { id: professionalId } }
+      where: whereClause
     });
 
     if (!patient) {
       return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece.' });
     }
 
+    let historyWhereClause = { patient: { id: parseInt(patient_id) } };
+    if (req.user.role !== 'ADMIN') {
+        historyWhereClause.professional = { id: professionalId };
+    }
+
     const history = await historyRepo.find({
-      where: { patient: { id: parseInt(patient_id) }, professional: { id: professionalId } },
+      where: historyWhereClause,
       order: { fecha: 'DESC' }
     });
 
@@ -67,8 +89,15 @@ export const updateHistoryEntry = async (req, res) => {
     const updateData = req.body;
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
 
+
+
+    let whereClause = { id: parseInt(id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professional = { id: professionalId };
+    }
+
     const entry = await historyRepo.findOne({
-      where: { id: parseInt(id), professional: { id: professionalId } }
+      where: whereClause
     });
 
     if (!entry) {

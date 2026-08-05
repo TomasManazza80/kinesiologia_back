@@ -12,7 +12,7 @@ export const UserSchema = new EntitySchema({
     name: { type: 'varchar', nullable: true },
     password: { type: 'varchar', nullable: true },
     role: { type: 'enum', enum: enums.UserRole, default: 'USER', nullable: true },
-    specialty: { type: 'varchar', nullable: true }, // Added for Kinesiologist
+    specialty: { type: 'simple-array', nullable: true }, // Added for Kinesiologist
     session_fee: { type: 'numeric', nullable: true, default: 0 },
     require_payment: { type: 'boolean', default: false, nullable: true },
     mp_access_token: { type: 'varchar', nullable: true },
@@ -20,9 +20,11 @@ export const UserSchema = new EntitySchema({
     mp_user_id: { type: 'varchar', nullable: true },
     profile_picture: { type: 'varchar', nullable: true },
     is_public: { type: 'boolean', default: false, nullable: true },
+    whatsapp_connected: { type: 'boolean', default: false, nullable: true },
+    whatsapp_message_template: { type: 'text', nullable: true },
   },
   relations: {
-    patients: { target: 'Patient', type: 'one-to-many', inverseSide: 'professional' },
+    patients: { target: 'Patient', type: 'many-to-many', inverseSide: 'professionals' },
     appointments: { target: 'Appointment', type: 'one-to-many', inverseSide: 'professional' },
     medicalHistories: { target: 'MedicalHistory', type: 'one-to-many', inverseSide: 'professional' }
   }

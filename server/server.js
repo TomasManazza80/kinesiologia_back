@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import {createServer} from "node:http"
+import { Server } from 'socket.io';
 import * as authController from "./controllers/authController.js";
 import {authenticateToken} from "./controllers/authController.js";
 import * as userController from "./controllers/userController.js";
@@ -8,6 +9,7 @@ import publicRoutes from "./routes/publicRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import kinesioRoutes from "./routes/kinesioRoutes.js"; // New Kinesiology routes
+import whatsappRoutes from "./routes/whatsappRoutes.js";
 
 // eslint-disable-next-line no-undef
 const PORT = process.env.PORT || 3000;
@@ -37,6 +39,9 @@ app.use('/api/upload', uploadRoutes);
 // Kinesiology API
 app.use('/api/kinesio', kinesioRoutes);
 
+// WhatsApp API
+app.use('/api/whatsapp', whatsappRoutes);
+
 // Auth
 router.post('/signup', authController.registerUser);
 router.post('/login', authController.login);
@@ -53,6 +58,21 @@ app.use((err, req, res, next) => {
 })
 
 const server = createServer(app);
+
+// Setup Socket.io
+export const io = new Server(server, {
+    cors: {
+        origin: allowedOrigins,
+        methods: ["GET", "POST"]
+    }
+});
+
+io.on("connection", (socket) => {
+    console.log("Client connected via Socket.io:", socket.id);
+    socket.on("disconnect", () => {
+        console.log("Client disconnected:", socket.id);
+    });
+});
 
 import { AppDataSource } from './database.js';
 
