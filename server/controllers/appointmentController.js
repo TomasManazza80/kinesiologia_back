@@ -57,11 +57,27 @@ import { Between } from 'typeorm';
 
 export const getAppointments = async (req, res) => {
   try {
-    const professionalId = (['ADMIN', 'EMPLOYEE'].includes(req.user.role) && req.query.professional_id) ? parseInt(req.query.professional_id) : req.user.userId;
-    const { start_date, end_date } = req.query;
+    const { start_date, end_date, professional_id, patient_id } = req.query;
     const appointmentRepo = AppDataSource.getRepository('Appointment');
     
-    let whereClause = { professional: { id: professionalId } };
+    let whereClause = {};
+    
+    if (req.user.role === 'ADMIN') {
+        if (professional_id) {
+            whereClause.professional = { id: parseInt(professional_id) };
+        }
+    } else {
+        // Para empleados
+        if (!patient_id) {
+            // Si no estan filtrando por un paciente en particular (ej. en el calendario), solo ven lo suyo
+            whereClause.professional = { id: req.user.userId };
+        }
+        // Si hay patient_id, permitimos ver todo el historial de ese paciente
+    }
+
+    if (patient_id) {
+        whereClause.patient = { id: parseInt(patient_id) };
+    }
     
     if (start_date && end_date) {
         whereClause.fecha_hora = Between(new Date(start_date), new Date(end_date));

@@ -12,6 +12,9 @@ import { TransactionSchema } from './entities/Transaction.js';
 import { TaskSchema } from './entities/Task.js';
 import { AvailabilitySchema } from './entities/Availability.js';
 import { SpecialtySchema } from './entities/Specialty.js';
+import { RecordTemplateSchema } from './entities/RecordTemplate.js';
+import { MedicalRecordSchema } from './entities/MedicalRecord.js';
+
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -33,7 +36,9 @@ export const AppDataSource = new DataSource({
     TransactionSchema,
     TaskSchema,
     AvailabilitySchema,
-    SpecialtySchema
+    SpecialtySchema,
+    RecordTemplateSchema,
+    MedicalRecordSchema
   ],
   subscribers: [],
   migrations: [],

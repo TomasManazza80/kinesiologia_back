@@ -25,11 +25,8 @@ export const getBalance = async (req, res) => {
         }
 
         const queryBuilder = transactionRepo.createQueryBuilder('transaction')
-            .where('COALESCE(transaction.date, transaction.created_at) BETWEEN :start AND :end', { start: startDate, end: endDate });
-
-        if (role !== 'ADMIN') {
-            queryBuilder.andWhere('transaction.professional_id = :userId', { userId });
-        }
+            .where('COALESCE(transaction.date, transaction.created_at) BETWEEN :start AND :end', { start: startDate, end: endDate })
+            .andWhere('transaction.professional_id = :userId', { userId });
 
         const transactions = await queryBuilder.orderBy('COALESCE(transaction.date, transaction.created_at)', 'DESC').getMany();
 
@@ -98,11 +95,8 @@ export const getTransactionHistory = async (req, res) => {
         // Obtenemos transacciones desde siempre hasta la fecha actual
         
         const queryBuilder = transactionRepo.createQueryBuilder('transaction')
-            .where('transaction.created_at <= :end', { end: endDate });
-
-        if (role !== 'ADMIN') {
-            queryBuilder.andWhere('transaction.professional_id = :userId', { userId });
-        }
+            .where('transaction.created_at <= :end', { end: endDate })
+            .andWhere('transaction.professional_id = :userId', { userId });
 
         const [transactions, total] = await queryBuilder
             .orderBy('COALESCE(transaction.date, transaction.created_at)', 'DESC')
@@ -139,7 +133,7 @@ export const updateTransaction = async (req, res) => {
             return res.status(404).json({ message: "Transacción no encontrada" });
         }
 
-        if (role !== 'ADMIN' && transaction.professional?.id !== userId) {
+        if (transaction.professional?.id !== userId) {
             return res.status(403).json({ message: "No tienes permiso para editar esta transacción" });
         }
 

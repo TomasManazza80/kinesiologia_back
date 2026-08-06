@@ -1,4 +1,4 @@
-import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { AppDataSource } from '../database.js';
 import { io } from '../server.js';
@@ -15,12 +15,15 @@ export const initializeClient = async (profId) => {
     try {
         const sessionPath = path.resolve(`whatsapp_sessions/prof_${profId}`);
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        const { version } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
+            version,
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: ['Kinesio App', 'Chrome', '1.0.0']
+            browser: Browsers.macOS('Desktop'),
+            syncFullHistory: false
         });
 
         clients.set(profId, { instance: sock, status: 'initializing', qr: null });

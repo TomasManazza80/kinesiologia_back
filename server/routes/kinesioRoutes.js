@@ -3,6 +3,7 @@ import { authenticateToken } from '../controllers/authController.js';
 import * as patientController from '../controllers/patientController.js';
 import * as appointmentController from '../controllers/appointmentController.js';
 import * as medicalHistoryController from '../controllers/medicalHistoryController.js';
+import { medicalRecordsController } from '../controllers/medicalRecordsController.js';
 import * as userController from '../controllers/userController.js';
 import * as availabilityController from '../controllers/availabilityController.js';
 import * as mpAuthController from '../controllers/mpAuthController.js';
@@ -36,10 +37,19 @@ router.get('/my-appointments', authenticateToken, appointmentController.getMyPat
 router.put('/appointments/:id', authenticateToken, appointmentController.updateAppointment);
 router.delete('/appointments/:id', authenticateToken, appointmentController.deleteAppointment);
 
-// Historial Médico
+// Historial Médico (Old Static)
 router.post('/history', authenticateToken, medicalHistoryController.createHistoryEntry);
 router.get('/history/patient/:patient_id', authenticateToken, medicalHistoryController.getHistoryByPatient);
 router.put('/history/:id', authenticateToken, medicalHistoryController.updateHistoryEntry);
+
+// Plantillas de Historial (Dynamic)
+router.post('/templates', authenticateToken, medicalRecordsController.createTemplate);
+router.get('/templates', authenticateToken, medicalRecordsController.getTemplates);
+
+// Historial Médico (Dynamic)
+router.post('/medical-records', authenticateToken, medicalRecordsController.createRecord);
+router.get('/medical-records/patient/:patient_id', authenticateToken, medicalRecordsController.getPatientRecords);
+router.put('/medical-records/:id', authenticateToken, medicalRecordsController.updateRecord);
 
 // Disponibilidad
 router.get('/availability', authenticateToken, availabilityController.getAvailability);
