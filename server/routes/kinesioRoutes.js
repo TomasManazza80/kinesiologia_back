@@ -45,6 +45,7 @@ router.put('/history/:id', authenticateToken, medicalHistoryController.updateHis
 // Plantillas de Historial (Dynamic)
 router.post('/templates', authenticateToken, medicalRecordsController.createTemplate);
 router.get('/templates', authenticateToken, medicalRecordsController.getTemplates);
+router.put('/templates/:id', authenticateToken, medicalRecordsController.updateTemplate);
 
 // Historial Médico (Dynamic)
 router.post('/medical-records', authenticateToken, medicalRecordsController.createRecord);
@@ -60,6 +61,7 @@ router.get('/balance', authenticateToken, transactionController.getBalance);
 router.post('/transactions', authenticateToken, transactionController.createTransaction);
 router.put('/transactions/:id', authenticateToken, transactionController.updateTransaction);
 router.get('/transactions/history', authenticateToken, transactionController.getTransactionHistory);
+router.get('/expenses', authenticateToken, transactionController.getExpenses);
 
 // MercadoPago OAuth
 router.get('/mp-auth-url', authenticateToken, mpAuthController.getAuthUrl);

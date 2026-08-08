@@ -116,6 +116,49 @@ export const getTransactionHistory = async (req, res) => {
     }
 };
 
+export const getExpenses = async (req, res) => {
+    try {
+        const rawId = req.user?.userId || req.user?.id;
+        const userId = rawId ? parseInt(rawId) : null;
+        const { startDate, endDate } = req.query;
+
+        const transactionRepo = AppDataSource.getRepository('Transaction');
+        let queryBuilder = transactionRepo.createQueryBuilder('transaction')
+            .where('transaction.type = :type', { type: 'expense' });
+
+        if (req.user.role !== 'ADMIN' && userId) {
+            queryBuilder = queryBuilder.andWhere('transaction.professional_id = :userId', { userId });
+        }
+
+        if (startDate && endDate) {
+            const start = moment(startDate).startOf('day').toDate();
+            const end = moment(endDate).endOf('day').toDate();
+            queryBuilder = queryBuilder.andWhere('COALESCE(transaction.date, transaction.created_at) BETWEEN :start AND :end', { start, end });
+        } else if (startDate) {
+            const start = moment(startDate).startOf('day').toDate();
+            queryBuilder = queryBuilder.andWhere('COALESCE(transaction.date, transaction.created_at) >= :start', { start });
+        } else if (endDate) {
+            const end = moment(endDate).endOf('day').toDate();
+            queryBuilder = queryBuilder.andWhere('COALESCE(transaction.date, transaction.created_at) <= :end', { end });
+        }
+
+        const expenses = await queryBuilder
+            .orderBy('COALESCE(transaction.date, transaction.created_at)', 'DESC')
+            .getMany();
+
+        const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+
+        res.json({
+            data: expenses,
+            totalExpenses,
+            count: expenses.length
+        });
+    } catch (error) {
+        console.error("Error al obtener egresos por rango:", error);
+        res.status(500).json({ message: "Error interno del servidor", details: error.message });
+    }
+};
+
 export const updateTransaction = async (req, res) => {
     try {
         const { role, userId } = req.user;

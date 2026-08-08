@@ -85,7 +85,8 @@ export const getHistoryByPatient = async (req, res) => {
 export const updateHistoryEntry = async (req, res) => {
   try {
     const { id } = req.params;
-    const professionalId = req.user.userId;
+    const rawId = req.user?.userId || req.user?.id;
+    const professionalId = rawId ? parseInt(rawId) : null;
     const updateData = req.body;
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
 
