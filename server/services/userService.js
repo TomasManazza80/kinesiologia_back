@@ -100,5 +100,39 @@ export async function updateUser(id, updateData) {
 }
 
 export async function deleteUser(id) {
-    return getUserRepo().delete(id);
+    const userRepo = getUserRepo();
+    const user = await userRepo.findOne({
+        where: { id: parseInt(id) },
+        relations: { patients: true }
+    });
+
+    if (!user) return null;
+
+    // Clear many-to-many relationship with patients
+    if (user.patients && user.patients.length > 0) {
+        user.patients = [];
+        await userRepo.save(user);
+    }
+
+    try {
+        const availabilityRepo = AppDataSource.getRepository('Availability');
+        await availabilityRepo.delete({ professional: { id: parseInt(id) } });
+    } catch (e) { console.error("Error clearing availability on delete:", e); }
+
+    try {
+        const appointmentRepo = AppDataSource.getRepository('Appointment');
+        await appointmentRepo.delete({ professional: { id: parseInt(id) } });
+    } catch (e) { console.error("Error clearing appointments on delete:", e); }
+
+    try {
+        const medicalHistoryRepo = AppDataSource.getRepository('MedicalHistory');
+        await medicalHistoryRepo.delete({ professional: { id: parseInt(id) } });
+    } catch (e) { console.error("Error clearing medical history on delete:", e); }
+
+    try {
+        const transactionRepo = AppDataSource.getRepository('Transaction');
+        await transactionRepo.delete({ professional: { id: parseInt(id) } });
+    } catch (e) { console.error("Error clearing transactions on delete:", e); }
+
+    return userRepo.delete(parseInt(id));
 }

@@ -16,6 +16,7 @@ const router = express.Router();
 router.get('/professionals', authenticateToken, userController.getProfessionals);
 router.post('/professionals', authenticateToken, userController.adminCreateUser);
 router.put('/professionals/:id', authenticateToken, userController.adminUpdateUser);
+router.delete('/professionals/:id', authenticateToken, userController.adminDeleteUser);
 
 // Especialidades
 router.get('/specialties', authenticateToken, specialtyController.getSpecialties);
