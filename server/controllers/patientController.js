@@ -129,3 +129,49 @@ export const deletePatient = async (req, res) => {
     res.status(500).json({ error: 'Error al eliminar paciente', details: error.message });
   }
 };
+
+export const sharePatient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { targetProfessionalIds } = req.body;
+    const professionalId = req.user.userId;
+    const patientRepo = AppDataSource.getRepository('Patient');
+
+    let whereClause = { id: parseInt(id) };
+    if (req.user.role !== 'ADMIN') {
+        whereClause.professionals = { id: professionalId };
+    }
+
+    const patient = await patientRepo.findOne({
+      where: whereClause,
+      relations: { professionals: true }
+    });
+
+    if (!patient) {
+      return res.status(403).json({ error: 'El paciente no existe o no tienes acceso a él.' });
+    }
+
+    const idsToAdd = Array.isArray(targetProfessionalIds) ? targetProfessionalIds : [targetProfessionalIds];
+    const currentProfIds = new Set((patient.professionals || []).map(p => p.id));
+
+    idsToAdd.forEach(pId => {
+        if (pId && !isNaN(parseInt(pId))) {
+            currentProfIds.add(parseInt(pId));
+        }
+    });
+
+    patient.professionals = Array.from(currentProfIds).map(pId => ({ id: pId }));
+
+    await patientRepo.save(patient);
+
+    const updatedPatient = await patientRepo.findOne({
+      where: { id: parseInt(id) },
+      relations: { professionals: true }
+    });
+
+    res.json({ message: 'Paciente e historial médico compartidos correctamente', patient: updatedPatient });
+  } catch (error) {
+    console.error("Error al compartir paciente:", error);
+    res.status(500).json({ error: 'Error al compartir paciente', details: error.message });
+  }
+};

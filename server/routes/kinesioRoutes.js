@@ -30,6 +30,7 @@ router.get('/patients', authenticateToken, patientController.getPatients);
 router.get('/patients/:id', authenticateToken, patientController.getPatientById);
 router.put('/patients/:id', authenticateToken, patientController.updatePatient);
 router.delete('/patients/:id', authenticateToken, patientController.deletePatient);
+router.post('/patients/:id/share', authenticateToken, patientController.sharePatient);
 
 // Turnos
 router.post('/appointments', authenticateToken, appointmentController.createAppointment);
