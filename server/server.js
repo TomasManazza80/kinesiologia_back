@@ -16,11 +16,36 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 const router = express.Router();
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-    ? [process.env.VITE_PUBLIC_URL, process.env.VITE_PUBLIC_URL?.replace(/\/$/, ''), 'https://elcrucecarniceria.netlify.app', 'http://localhost:5173', 'http://localhost:5174', 'https://pauses.netlify.app'] 
-    : ['http://localhost:5173', 'http://localhost:5174', 'https://elcrucecarniceria.netlify.app', process.env.VITE_PUBLIC_URL, process.env.VITE_PUBLIC_URL?.replace(/\/$/, ''), 'https://pauses.netlify.app'];
+const defaultOrigins = [
+    'https://pauses.info',
+    'https://www.pauses.info',
+    'https://pauses.netlify.app',
+    'https://elcrucecarniceria.netlify.app',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:3000'
+];
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+const envOrigins = [
+    process.env.VITE_PUBLIC_URL,
+    process.env.VITE_PUBLIC_URL?.replace(/\/$/, ''),
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URL?.replace(/\/$/, '')
+].filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const cleanOrigin = origin.replace(/\/$/, '');
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes(cleanOrigin) || cleanOrigin.endsWith('.pauses.info') || cleanOrigin === 'https://pauses.info') {
+            return callback(null, true);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 app.use(express.json());
 app.use(router);
 

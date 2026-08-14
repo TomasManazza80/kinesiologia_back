@@ -9,14 +9,14 @@ dotenv.config();
 import * as userService from '../services/userService.js';
 
 export async function registerUser(req, res) {
-    const {email, password, first_name, last_name, role, civilStatus, occupation, income, creditScore} = req.body;
+    const {email, password, first_name, last_name, civilStatus, occupation, income, creditScore} = req.body;
     try {
         const newUser = await userService.createUser({
             email, 
             password, 
             firstName: first_name, 
             lastName: last_name, 
-            role: role || 'USER',
+            role: 'USER',
             civilStatus,
             occupation,
             income,
