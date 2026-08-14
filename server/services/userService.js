@@ -21,7 +21,8 @@ export async function getProfessionals() {
         relations: { patients: true },
         select: { 
             id: true, email: true, name: true, specialty: true, role: true, 
-            session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true
+            session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true,
+            createdAt: true, updatedAt: true
         }
     });
 }

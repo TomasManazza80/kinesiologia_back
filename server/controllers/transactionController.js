@@ -4,9 +4,14 @@ import moment from 'moment';
 export const getBalance = async (req, res) => {
     try {
         const { role, userId } = req.user;
-        const { filter = 'Mes' } = req.query;
+        const { filter = 'Mes', scope = 'personal' } = req.query;
+
+        if (scope === 'group' && role !== 'ADMIN' && role !== 'SUPERADMIN') {
+            return res.status(403).json({ message: "Acceso denegado: Solo los administradores pueden ver el balance grupal" });
+        }
         
-        const transactionRepo = AppDataSource.getRepository('Transaction');
+        const repoName = scope === 'group' ? 'GroupTransaction' : 'Transaction';
+        const transactionRepo = AppDataSource.getRepository(repoName);
 
         let startDate;
         let endDate = moment().endOf('day').toDate();
@@ -25,8 +30,14 @@ export const getBalance = async (req, res) => {
         }
 
         const queryBuilder = transactionRepo.createQueryBuilder('transaction')
-            .where('COALESCE(transaction.date, transaction.created_at) BETWEEN :start AND :end', { start: startDate, end: endDate })
-            .andWhere('transaction.professional_id = :userId', { userId });
+            .where('COALESCE(transaction.date, transaction.created_at) BETWEEN :start AND :end', { start: startDate, end: endDate });
+
+        if (scope === 'group') {
+            queryBuilder.leftJoinAndSelect('transaction.createdBy', 'user');
+        } else {
+            queryBuilder.leftJoinAndSelect('transaction.professional', 'professional')
+                        .andWhere('transaction.professional_id = :userId', { userId });
+        }
 
         const transactions = await queryBuilder.orderBy('COALESCE(transaction.date, transaction.created_at)', 'DESC').getMany();
 
@@ -58,13 +69,20 @@ export const getBalance = async (req, res) => {
 export const createTransaction = async (req, res) => {
     try {
         const { role, userId } = req.user;
-        const { title, subtitle, amount, type, category, paymentMethod, date } = req.body;
+        const { title, subtitle, amount, type, category, paymentMethod, date, isGroup, is_group, scope } = req.body;
 
         if (!title || !amount || !type) {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
         }
 
-        const transactionRepo = AppDataSource.getRepository('Transaction');
+        const isGroupTx = isGroup === true || is_group === true || scope === 'group';
+
+        if (isGroupTx && role !== 'ADMIN' && role !== 'SUPERADMIN') {
+            return res.status(403).json({ message: "Acceso denegado: Solo los administradores pueden registrar transacciones grupales" });
+        }
+
+        const repoName = isGroupTx ? 'GroupTransaction' : 'Transaction';
+        const transactionRepo = AppDataSource.getRepository(repoName);
         
         const newTransaction = transactionRepo.create({
             title,
@@ -73,9 +91,14 @@ export const createTransaction = async (req, res) => {
             type,
             category,
             payment_method: paymentMethod || null,
-            date: date ? new Date(date) : new Date(),
-            professional: { id: userId }
+            date: date ? new Date(date) : new Date()
         });
+
+        if (isGroupTx) {
+            newTransaction.createdBy = { id: userId };
+        } else {
+            newTransaction.professional = { id: userId };
+        }
 
         await transactionRepo.save(newTransaction);
         res.status(201).json(newTransaction);
@@ -88,15 +111,25 @@ export const createTransaction = async (req, res) => {
 export const getTransactionHistory = async (req, res) => {
     try {
         const { role, userId } = req.user;
-        const { offset = 0, limit = 50 } = req.query;
+        const { offset = 0, limit = 50, scope = 'personal' } = req.query;
+
+        if (scope === 'group' && role !== 'ADMIN' && role !== 'SUPERADMIN') {
+            return res.status(403).json({ message: "Acceso denegado: Solo los administradores pueden ver el historial grupal" });
+        }
         
-        const transactionRepo = AppDataSource.getRepository('Transaction');
+        const repoName = scope === 'group' ? 'GroupTransaction' : 'Transaction';
+        const transactionRepo = AppDataSource.getRepository(repoName);
         const endDate = moment().endOf('day').toDate();
-        // Obtenemos transacciones desde siempre hasta la fecha actual
         
         const queryBuilder = transactionRepo.createQueryBuilder('transaction')
-            .where('transaction.created_at <= :end', { end: endDate })
-            .andWhere('transaction.professional_id = :userId', { userId });
+            .where('transaction.created_at <= :end', { end: endDate });
+
+        if (scope === 'group') {
+            queryBuilder.leftJoinAndSelect('transaction.createdBy', 'user');
+        } else {
+            queryBuilder.leftJoinAndSelect('transaction.professional', 'professional')
+                        .andWhere('transaction.professional_id = :userId', { userId });
+        }
 
         const [transactions, total] = await queryBuilder
             .orderBy('COALESCE(transaction.date, transaction.created_at)', 'DESC')
@@ -120,14 +153,23 @@ export const getExpenses = async (req, res) => {
     try {
         const rawId = req.user?.userId || req.user?.id;
         const userId = rawId ? parseInt(rawId) : null;
-        const { startDate, endDate } = req.query;
+        const { role } = req.user;
+        const { startDate, endDate, scope = 'personal' } = req.query;
 
-        const transactionRepo = AppDataSource.getRepository('Transaction');
+        if (scope === 'group' && role !== 'ADMIN' && role !== 'SUPERADMIN') {
+            return res.status(403).json({ message: "Acceso denegado: Solo los administradores pueden ver egresos grupales" });
+        }
+
+        const repoName = scope === 'group' ? 'GroupTransaction' : 'Transaction';
+        const transactionRepo = AppDataSource.getRepository(repoName);
         let queryBuilder = transactionRepo.createQueryBuilder('transaction')
             .where('transaction.type = :type', { type: 'expense' });
 
-        if (req.user.role !== 'ADMIN' && userId) {
-            queryBuilder = queryBuilder.andWhere('transaction.professional_id = :userId', { userId });
+        if (scope === 'group') {
+            queryBuilder.leftJoinAndSelect('transaction.createdBy', 'user');
+        } else {
+            queryBuilder.leftJoinAndSelect('transaction.professional', 'professional')
+                        .andWhere('transaction.professional_id = :userId', { userId });
         }
 
         if (startDate && endDate) {
@@ -163,21 +205,31 @@ export const updateTransaction = async (req, res) => {
     try {
         const { role, userId } = req.user;
         const { id } = req.params;
-        const { title, subtitle, amount, type, category, paymentMethod, date } = req.body;
+        const { title, subtitle, amount, type, category, paymentMethod, date, isGroup, is_group, scope } = req.body;
 
-        const transactionRepo = AppDataSource.getRepository('Transaction');
+        const isGroupTx = isGroup === true || is_group === true || scope === 'group';
+        const repoName = isGroupTx ? 'GroupTransaction' : 'Transaction';
+        const transactionRepo = AppDataSource.getRepository(repoName);
         
-        const transaction = await transactionRepo.findOne({
+        const findOptions = {
             where: { id: parseInt(id) },
-            relations: { professional: true }
-        });
+            relations: isGroupTx ? { createdBy: true } : { professional: true }
+        };
+
+        const transaction = await transactionRepo.findOne(findOptions);
 
         if (!transaction) {
             return res.status(404).json({ message: "Transacción no encontrada" });
         }
 
-        if (transaction.professional?.id !== userId) {
-            return res.status(403).json({ message: "No tienes permiso para editar esta transacción" });
+        if (isGroupTx) {
+            if (role !== 'ADMIN' && role !== 'SUPERADMIN') {
+                return res.status(403).json({ message: "No tienes permiso para editar esta transacción grupal" });
+            }
+        } else {
+            if (transaction.professional?.id !== userId && role !== 'ADMIN' && role !== 'SUPERADMIN') {
+                return res.status(403).json({ message: "No tienes permiso para editar esta transacción personal" });
+            }
         }
 
         if (title !== undefined) transaction.title = title;

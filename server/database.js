@@ -9,6 +9,7 @@ import { PatientSchema } from './entities/Patient.js';
 import { AppointmentSchema } from './entities/Appointment.js';
 import { MedicalHistorySchema } from './entities/MedicalHistory.js';
 import { TransactionSchema } from './entities/Transaction.js';
+import { GroupTransactionSchema } from './entities/GroupTransaction.js';
 import { TaskSchema } from './entities/Task.js';
 import { AvailabilitySchema } from './entities/Availability.js';
 import { SpecialtySchema } from './entities/Specialty.js';
@@ -34,6 +35,7 @@ export const AppDataSource = new DataSource({
     AppointmentSchema,
     MedicalHistorySchema,
     TransactionSchema,
+    GroupTransactionSchema,
     TaskSchema,
     AvailabilitySchema,
     SpecialtySchema,
