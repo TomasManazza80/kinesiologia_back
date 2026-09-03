@@ -36,7 +36,7 @@ export const getAvailableSlots = async (req, res) => {
             return res.status(400).json({ message: "professional_id and date are required" });
         }
 
-        const profId = parseInt(professional_id);
+        const profId = professional_id;
         const requestDate = moment(date, 'YYYY-MM-DD');
         
         if (!requestDate.isValid()) {
@@ -144,7 +144,7 @@ export const createPublicAppointment = async (req, res) => {
             return res.status(400).json({ message: "Missing required fields" });
         }
 
-        const profId = parseInt(professional_id);
+        const profId = professional_id;
         const fechaHora = moment(`${date} ${time}`, 'YYYY-MM-DD HH:mm').toDate();
         
         const patientRepo = AppDataSource.getRepository('Patient');
@@ -352,7 +352,7 @@ export const handleMercadoPagoWebhook = async (req, res) => {
             const userRepo = AppDataSource.getRepository('User');
             const appointmentRepo = AppDataSource.getRepository('Appointment');
             
-            const prof = await userRepo.findOne({ where: { id: parseInt(profId) } });
+            const prof = await userRepo.findOne({ where: { id: profId } });
             if (!prof || !prof.mp_access_token) return;
 
             const client = new MercadoPagoConfig({ accessToken: prof.mp_access_token });

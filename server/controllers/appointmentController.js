@@ -6,7 +6,7 @@ import es from 'date-fns/locale/es/index.js';
 export async function createAppointment(req, res) {
   try {
     const { patient_id, professional_id, fecha_hora, end_time, motivo } = req.body;
-    const professionalId = (['ADMIN', 'EMPLOYEE'].includes(req.user.role) && professional_id) ? parseInt(professional_id) : req.user.userId;
+    const professionalId = (['ADMIN', 'EMPLOYEE'].includes(req.user.role) && professional_id) ? professional_id : req.user.userId;
     
     const patientRepo = AppDataSource.getRepository('Patient');
     const appointmentRepo = AppDataSource.getRepository('Appointment');
