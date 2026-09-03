@@ -103,7 +103,18 @@ export async function adminDeleteUser(req, res) {
         return res.status(403).json({ message: "No tienes permiso para eliminar usuarios" });
     }
     const { id } = req.params;
+    const { adminPassword } = req.body;
+
+    if (!adminPassword) {
+        return res.status(400).json({ message: "Se requiere su contraseña para confirmar la eliminación." });
+    }
+
     try {
+        const isValid = await userService.verifyUserPassword(req.user.userId, adminPassword);
+        if (!isValid) {
+            return res.status(401).json({ message: "Contraseña incorrecta." });
+        }
+
         await userService.deleteUser(parseInt(id));
         res.status(200).json({ message: "User deleted successfully" });
     } catch (error) {

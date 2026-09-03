@@ -8,7 +8,7 @@ async function run() {
         
         const adminData = {
             email: 'tomas.manazza8@gmail.com',
-            password: '123456',
+            password: '155332332Tomas',
             firstName: 'Tomas',
             lastName: 'Manazza',
             role: 'ADMIN'

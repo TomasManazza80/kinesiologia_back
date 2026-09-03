@@ -15,6 +15,10 @@ import { AvailabilitySchema } from './entities/Availability.js';
 import { SpecialtySchema } from './entities/Specialty.js';
 import { RecordTemplateSchema } from './entities/RecordTemplate.js';
 import { MedicalRecordSchema } from './entities/MedicalRecord.js';
+import { ClinicalProgramSchema } from './entities/ClinicalProgram.js';
+import { AdmissionPhaseSchema } from './entities/AdmissionPhase.js';
+import { ContactSessionSchema } from './entities/ContactSession.js';
+import { ComplementaryStudySchema } from './entities/ComplementaryStudy.js';
 
 
 export const AppDataSource = new DataSource({
@@ -25,7 +29,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : false,
   synchronize: true, 
   logging: false,
   entities: [
@@ -40,7 +44,11 @@ export const AppDataSource = new DataSource({
     AvailabilitySchema,
     SpecialtySchema,
     RecordTemplateSchema,
-    MedicalRecordSchema
+    MedicalRecordSchema,
+    ClinicalProgramSchema,
+    AdmissionPhaseSchema,
+    ContactSessionSchema,
+    ComplementaryStudySchema
   ],
   subscribers: [],
   migrations: [],

@@ -137,3 +137,10 @@ export async function deleteUser(id) {
 
     return userRepo.delete(parseInt(id));
 }
+
+export async function verifyUserPassword(userId, password) {
+    const userRepo = getUserRepo();
+    const user = await userRepo.findOne({ where: { id: userId } });
+    if (!user) return false;
+    return await bcrypt.compare(password, user.password);
+}

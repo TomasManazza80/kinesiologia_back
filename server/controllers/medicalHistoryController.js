@@ -73,7 +73,7 @@ export const getHistoryByPatient = async (req, res) => {
 
     const history = await historyRepo.find({
       where: historyWhereClause,
-      order: { fecha: 'DESC' }
+      order: { createdAt: 'DESC' }
     });
 
     res.json(history);

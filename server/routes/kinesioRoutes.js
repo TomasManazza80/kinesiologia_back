@@ -37,6 +37,8 @@ router.post('/appointments', authenticateToken, appointmentController.createAppo
 router.get('/appointments', authenticateToken, appointmentController.getAppointments);
 router.get('/my-appointments', authenticateToken, appointmentController.getMyPatientAppointments);
 router.put('/appointments/:id', authenticateToken, appointmentController.updateAppointment);
+router.post('/appointments/:id/notify', authenticateToken, appointmentController.notifyAppointment);
+router.put('/appointments/:id/cancel', authenticateToken, appointmentController.cancelAppointment);
 router.delete('/appointments/:id', authenticateToken, appointmentController.deleteAppointment);
 
 // Historial Médico (Old Static)
@@ -62,6 +64,7 @@ router.post('/availability', authenticateToken, availabilityController.saveAvail
 router.get('/balance', authenticateToken, transactionController.getBalance);
 router.post('/transactions', authenticateToken, transactionController.createTransaction);
 router.put('/transactions/:id', authenticateToken, transactionController.updateTransaction);
+router.delete('/transactions/:id', authenticateToken, transactionController.deleteTransaction);
 router.get('/transactions/history', authenticateToken, transactionController.getTransactionHistory);
 router.get('/expenses', authenticateToken, transactionController.getExpenses);
 

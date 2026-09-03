@@ -5,6 +5,7 @@ import moment from 'moment-timezone';
 import { Between } from 'typeorm';
 import dotenv from 'dotenv';
 import * as whatsappService from '../services/whatsappService.js';
+import bcrypt from 'bcryptjs';
 dotenv.config();
 
 export const getPublicProfessionals = async (req, res) => {
@@ -137,9 +138,9 @@ export const getAvailableSlots = async (req, res) => {
 
 export const createPublicAppointment = async (req, res) => {
     try {
-        const { professional_id, date, time, service, patient_name, patient_phone, patient_email } = req.body;
+        const { professional_id, date, time, service, patient_name, patient_dni, patient_phone, patient_email, password } = req.body;
         
-        if (!professional_id || !date || !time || !service || !patient_name || !patient_phone) {
+        if (!professional_id || !date || !time || !service || !patient_name || !patient_dni || !patient_phone) {
             return res.status(400).json({ message: "Missing required fields" });
         }
 
@@ -174,23 +175,50 @@ export const createPublicAppointment = async (req, res) => {
         }
         const endTime = moment(fechaHora).add(duration, 'minutes').toDate();
 
-        // Check if patient exists by phone and name for this professional
+        // Check if patient exists by DNI or name for this professional
         let patient = await patientRepo.findOne({
-            where: {
-                nombre: patient_name,
-                professionals: { id: profId }
-            }
+            where: [
+                { dni: patient_dni, professionals: { id: profId } },
+                { nombre: patient_name, professionals: { id: profId } }
+            ]
         });
 
         if (!patient) {
             patient = patientRepo.create({
                 nombre: patient_name,
+                dni: patient_dni,
                 email: patient_email,
                 datos_contacto: { telefono: patient_phone, email: patient_email },
                 professionals: [{ id: profId }],
-                status: 'activo'
+                status: 'activo',
+                absence_streak: 0
             });
             patient = await patientRepo.save(patient);
+        } else {
+            // Update DNI if missing
+            if (!patient.dni && patient_dni) {
+                patient.dni = patient_dni;
+                await patientRepo.save(patient);
+            }
+            // Check if patient is banned
+            if (patient.ban_until && moment(patient.ban_until).isAfter(moment())) {
+                return res.status(403).json({ message: "Debe esperar una semana para poder sacar turno debido a reiteradas inasistencias." });
+            }
+        }
+
+        // Si se proveyó contraseña y email, intentar crear un usuario para que pueda ver sus turnos
+        if (password && patient_email) {
+            const existingUser = await userRepo.findOne({ where: { email: patient_email } });
+            if (!existingUser) {
+                const hashedPassword = await bcrypt.hash(password, 10);
+                const newUser = userRepo.create({
+                    email: patient_email,
+                    password: hashedPassword,
+                    name: patient_name,
+                    role: 'USER'
+                });
+                await userRepo.save(newUser);
+            }
         }
 
         if (prof.require_payment && prof.session_fee > 0 && !prof.mp_access_token) {

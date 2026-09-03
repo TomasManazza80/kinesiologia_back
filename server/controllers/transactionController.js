@@ -247,3 +247,42 @@ export const updateTransaction = async (req, res) => {
         res.status(500).json({ message: "Error interno del servidor", details: error.message });
     }
 };
+
+export const deleteTransaction = async (req, res) => {
+    try {
+        const { role, userId } = req.user;
+        const { id } = req.params;
+        const { scope = 'personal' } = req.query;
+
+        const isGroupTx = scope === 'group';
+        const repoName = isGroupTx ? 'GroupTransaction' : 'Transaction';
+        const transactionRepo = AppDataSource.getRepository(repoName);
+        
+        const findOptions = {
+            where: { id: parseInt(id) },
+            relations: isGroupTx ? { createdBy: true } : { professional: true }
+        };
+
+        const transaction = await transactionRepo.findOne(findOptions);
+
+        if (!transaction) {
+            return res.status(404).json({ message: "Transacción no encontrada" });
+        }
+
+        if (isGroupTx) {
+            if (role !== 'ADMIN' && role !== 'SUPERADMIN') {
+                return res.status(403).json({ message: "No tienes permiso para eliminar esta transacción grupal" });
+            }
+        } else {
+            if (transaction.professional?.id !== userId && role !== 'ADMIN' && role !== 'SUPERADMIN') {
+                return res.status(403).json({ message: "No tienes permiso para eliminar esta transacción personal" });
+            }
+        }
+
+        await transactionRepo.remove(transaction);
+        res.json({ message: "Transacción eliminada exitosamente" });
+    } catch (error) {
+        console.error("Error al eliminar transacción:", error);
+        res.status(500).json({ message: "Error interno del servidor", details: error.message });
+    }
+};

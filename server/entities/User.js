@@ -5,7 +5,7 @@ export const UserSchema = new EntitySchema({
   name: 'User',
   tableName: 'user',
   columns: {
-    id: { primary: true, type: 'int', generated: true },
+    id: { primary: true, type: 'uuid', generated: 'uuid' },
     createdAt: { name: 'created_at', type: 'timestamptz', createDate: true },
     updatedAt: { name: 'updated_at', type: 'timestamptz', updateDate: true },
     email: { type: 'varchar', unique: true, nullable: true },

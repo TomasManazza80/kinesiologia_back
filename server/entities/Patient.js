@@ -11,10 +11,13 @@ export const PatientSchema = new EntitySchema({
     dni: { type: 'varchar', nullable: true },
     email: { type: 'varchar', nullable: true },
     datos_contacto: { type: 'jsonb', nullable: true },
+    admissionData: { type: 'jsonb', nullable: true },
     fecha_nacimiento: { type: 'date', nullable: true },
     blood_type: { type: 'varchar', nullable: true },
     gender: { type: 'varchar', nullable: true },
-    status: { type: 'varchar', nullable: true }
+    status: { type: 'varchar', nullable: true },
+    absence_streak: { type: 'int', default: 0 },
+    ban_until: { type: 'timestamp', nullable: true }
   },
   relations: {
     professionals: {

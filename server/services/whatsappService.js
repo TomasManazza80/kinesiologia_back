@@ -125,7 +125,7 @@ export const sendMessage = async (profId, toPhone, message) => {
     }
 
     try {
-        let formattedPhone = toPhone.replace(/\D/g, ''); 
+        let formattedPhone = String(toPhone).replace(/\D/g, ''); 
         
         if (!formattedPhone.startsWith('54') && formattedPhone.length === 10) {
              formattedPhone = '549' + formattedPhone;
