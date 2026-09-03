@@ -27,7 +27,7 @@ export const ContactSessionSchema = new EntitySchema({
       target: 'User',
       type: 'many-to-one',
       joinColumn: { name: 'professional_id' },
-      nullable: false
+      nullable: true
     },
     complementaryStudies: {
       target: 'ComplementaryStudy',
