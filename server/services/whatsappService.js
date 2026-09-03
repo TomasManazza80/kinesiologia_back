@@ -12,6 +12,9 @@ export const initializeClient = async (profId) => {
         return { status: clients.get(profId).status };
     }
 
+    // Set initializing state synchronously to prevent race conditions
+    clients.set(profId, { instance: null, status: 'initializing', qr: null });
+
     try {
         const sessionPath = path.resolve(`whatsapp_sessions/prof_${profId}`);
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
@@ -26,6 +29,7 @@ export const initializeClient = async (profId) => {
             syncFullHistory: false
         });
 
+        // Update with the actual instance
         clients.set(profId, { instance: sock, status: 'initializing', qr: null });
 
         sock.ev.on('creds.update', saveCreds);
@@ -80,6 +84,7 @@ export const initializeClient = async (profId) => {
         return { status: 'initializing' };
     } catch (error) {
         console.error(`[WhatsApp] Error initializing Prof ${profId}:`, error);
+        clients.delete(profId);
         throw error;
     }
 };

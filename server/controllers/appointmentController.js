@@ -217,16 +217,33 @@ export async function notifyAppointment(req, res) {
     
     const appointment = await appointmentRepo.findOne({
       where: { id: parseInt(id) },
-      relations: ['patient', 'professional']
+      relations: { patient: true, professional: true }
     });
 
     if (!appointment) {
       return res.status(404).json({ error: 'Turno no encontrado' });
     }
 
-    const { patient, professional } = appointment;
+    let { patient, professional } = appointment;
 
-    if (!patient.datos_contacto?.telefono && !patient.datos_contacto?.phone) {
+    if (!patient) {
+      return res.status(400).json({ error: 'El turno no tiene un paciente asignado' });
+    }
+
+    if (!professional) {
+      return res.status(400).json({ error: 'El turno no tiene un profesional asignado' });
+    }
+
+    let datosContacto = patient.datos_contacto;
+    if (typeof datosContacto === 'string') {
+      try {
+        datosContacto = JSON.parse(datosContacto);
+      } catch (e) {
+        datosContacto = {};
+      }
+    }
+
+    if (!datosContacto?.telefono && !datosContacto?.phone) {
         return res.status(400).json({ error: 'El paciente no tiene un número de teléfono registrado' });
     }
 
@@ -247,13 +264,14 @@ export async function notifyAppointment(req, res) {
     msg = msg.replace(/{{service}}/g, appointment.motivo || 'Turno');
     msg = msg.replace(/{{professional_name}}/g, prof.name || '');
 
-    const phone = patient.datos_contacto?.telefono || patient.datos_contacto?.phone;
+    const phone = datosContacto?.telefono || datosContacto?.phone;
     
     whatsappService.sendMessage(prof.id, phone, msg);
 
     res.json({ message: 'Notificación enviada correctamente' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al enviar notificación', details: error.message });
+    console.error('Error in notifyAppointment:', error);
+    res.status(500).json({ error: 'Error al enviar notificación', details: String(error), stack: error.stack });
   }
 };
 
