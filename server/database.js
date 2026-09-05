@@ -19,6 +19,7 @@ import { ClinicalProgramSchema } from './entities/ClinicalProgram.js';
 import { AdmissionPhaseSchema } from './entities/AdmissionPhase.js';
 import { ContactSessionSchema } from './entities/ContactSession.js';
 import { ComplementaryStudySchema } from './entities/ComplementaryStudy.js';
+import { SiteSettingsSchema } from './entities/SiteSettings.js';
 
 
 export const AppDataSource = new DataSource({
@@ -48,7 +49,8 @@ export const AppDataSource = new DataSource({
     ClinicalProgramSchema,
     AdmissionPhaseSchema,
     ContactSessionSchema,
-    ComplementaryStudySchema
+    ComplementaryStudySchema,
+    SiteSettingsSchema
   ],
   subscribers: [],
   migrations: [],

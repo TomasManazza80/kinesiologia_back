@@ -58,7 +58,7 @@ app.get('/', (req, res) => {
 
 // Public API
 app.use('/api/public', publicRoutes);
-// app.use('/api/settings', settingsRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Kinesiology API

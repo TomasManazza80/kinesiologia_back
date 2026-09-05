@@ -131,3 +131,41 @@ export const updateHeroSettings = async (req, res) => {
         return res.status(500).json({ success: false, message: "Server Error" });
     }
 };
+
+export const getPageContent = async (req, res) => {
+    try {
+        const settingsRepo = AppDataSource.getRepository('SiteSettings');
+        let settings = await settingsRepo.findOne({ where: { id: 1 } });
+        
+        if (!settings) {
+            settings = settingsRepo.create({ id: 1, pageData: null });
+            await settingsRepo.save(settings);
+        }
+        
+        return res.status(200).json({ success: true, data: settings.pageData });
+    } catch (error) {
+        console.error("Error fetching page content:", error);
+        return res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+
+export const updatePageContent = async (req, res) => {
+    try {
+        const { pageData } = req.body;
+        const settingsRepo = AppDataSource.getRepository('SiteSettings');
+        let settings = await settingsRepo.findOne({ where: { id: 1 } });
+        
+        if (settings) {
+            settings.pageData = pageData;
+            await settingsRepo.save(settings);
+        } else {
+            settings = settingsRepo.create({ id: 1, pageData });
+            await settingsRepo.save(settings);
+        }
+        
+        return res.status(200).json({ success: true, message: "Contenido actualizado correctamente" });
+    } catch (error) {
+        console.error("Error updating page content:", error);
+        return res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
