@@ -37,7 +37,7 @@ export const getAvailableSlots = async (req, res) => {
         }
 
         const profId = professional_id;
-        const requestDate = moment(date, 'YYYY-MM-DD');
+        const requestDate = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
         
         if (!requestDate.isValid()) {
             return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
@@ -102,8 +102,8 @@ export const getAvailableSlots = async (req, res) => {
             if (!schedule.start_time || !schedule.end_time) continue;
             
             const slotDurationMinutes = schedule.session_duration || 30;
-            let currentSlot = moment(`${date} ${schedule.start_time}`, 'YYYY-MM-DD HH:mm');
-            const endTime = moment(`${date} ${schedule.end_time}`, 'YYYY-MM-DD HH:mm');
+            let currentSlot = moment.tz(`${date} ${schedule.start_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
+            const endTime = moment.tz(`${date} ${schedule.end_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
 
             while (currentSlot.isBefore(endTime)) {
                 const slotStart = currentSlot.toDate();
@@ -145,7 +145,7 @@ export const createPublicAppointment = async (req, res) => {
         }
 
         const profId = professional_id;
-        const fechaHora = moment(`${date} ${time}`, 'YYYY-MM-DD HH:mm').toDate();
+        const fechaHora = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires').toDate();
         
         const patientRepo = AppDataSource.getRepository('Patient');
         const appointmentRepo = AppDataSource.getRepository('Appointment');
@@ -158,7 +158,7 @@ export const createPublicAppointment = async (req, res) => {
         }
 
         // Determinar duración de la sesión según disponibilidad
-        const requestDate = moment(date, 'YYYY-MM-DD');
+        const requestDate = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
         const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
         const dayOfWeek = daysMap[requestDate.day()];
         
