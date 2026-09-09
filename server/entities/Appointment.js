@@ -7,8 +7,8 @@ export const AppointmentSchema = new EntitySchema({
     id: { primary: true, type: 'int', generated: true },
     createdAt: { name: 'created_at', type: 'timestamptz', createDate: true },
     updatedAt: { name: 'updated_at', type: 'timestamptz', updateDate: true },
-    fecha_hora: { type: 'timestamp' },
-    end_time: { type: 'timestamp', nullable: true },
+    fecha_hora: { type: 'timestamptz' },
+    end_time: { type: 'timestamptz', nullable: true },
     type: { type: 'varchar', nullable: true },
     estado: { type: 'varchar', default: 'pendiente' }, // pendiente, pendiente_pago, confirmado, cancelado
     motivo: { type: 'varchar', nullable: true },
