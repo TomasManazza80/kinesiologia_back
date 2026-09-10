@@ -3,6 +3,7 @@ import * as whatsappService from '../services/whatsappService.js';
 import { format, isValid } from 'date-fns';
 import es from 'date-fns/locale/es/index.js';
 import moment from 'moment-timezone';
+import { Between } from 'typeorm';
 
 export async function createAppointment(req, res) {
   try {
@@ -25,6 +26,32 @@ export async function createAppointment(req, res) {
     let endTimeParsed = null;
     if (end_time) {
       endTimeParsed = moment.tz(end_time, 'America/Argentina/Buenos_Aires').toISOString();
+    }
+
+    // Check for overlapping appointments
+    const startOfDay = moment(fechaHoraParsed).startOf('day').toDate();
+    const endOfDay = moment(fechaHoraParsed).endOf('day').toDate();
+
+    const dailyAppointments = await appointmentRepo.find({
+        where: {
+            professional: { id: professionalId },
+            fecha_hora: Between(startOfDay, endOfDay)
+        }
+    });
+
+    const validAppointments = dailyAppointments.filter(app => app.estado !== 'cancelado');
+
+    const newStart = moment(fechaHoraParsed).toDate();
+    const newEnd = endTimeParsed ? moment(endTimeParsed).toDate() : moment(fechaHoraParsed).add(30, 'minutes').toDate();
+
+    const isOverlapping = validAppointments.some(app => {
+        const appStart = moment(app.fecha_hora).toDate();
+        const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
+        return (newStart < appEnd && newEnd > appStart);
+    });
+
+    if (isOverlapping) {
+        return res.status(409).json({ error: 'Ya existe un turno en este horario. Para agendar un turno nuevo, primero debe eliminar o reprogramar el existente.' });
     }
 
     const newAppointment = appointmentRepo.create({
@@ -62,8 +89,6 @@ export async function createAppointment(req, res) {
     res.status(500).json({ error: 'Error al crear turno', details: error.message });
   }
 };
-
-import { Between } from 'typeorm';
 
 export async function getAppointments(req, res) {
   try {

@@ -226,17 +226,17 @@ export const createPublicAppointment = async (req, res) => {
         }
 
         // Double check if slot is still free to prevent double booking
-        const overlapping = await appointmentRepo.find({
+        const startOfDay = moment(fechaHora).startOf('day').toDate();
+        const endOfDay = moment(fechaHora).endOf('day').toDate();
+
+        const dailyAppointments = await appointmentRepo.find({
             where: {
                 professional: { id: profId },
-                fecha_hora: Between(
-                    moment(fechaHora).subtract(1, 'minutes').toISOString(), 
-                    moment(endTime).subtract(1, 'minutes').toISOString()
-                )
+                fecha_hora: Between(startOfDay, endOfDay)
             }
         });
 
-        const validOverlapping = overlapping.filter(app => {
+        const validAppointments = dailyAppointments.filter(app => {
             if (app.estado === 'cancelado') return false;
             if (app.estado === 'pendiente_pago') {
                 const createdAt = moment(app.createdAt);
@@ -246,7 +246,19 @@ export const createPublicAppointment = async (req, res) => {
             }
             return true;
         });
-        if (validOverlapping.length > 0) {
+
+        const newStart = moment(fechaHora).toDate();
+        const newEnd = moment(endTime).toDate();
+
+        const isOverlapping = validAppointments.some(app => {
+            const appStart = moment(app.fecha_hora).toDate();
+            const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
+            
+            // Formula for overlapping intervals: (StartA < EndB) && (EndA > StartB)
+            return (newStart < appEnd && newEnd > appStart);
+        });
+
+        if (isOverlapping) {
             return res.status(409).json({ message: "El turno ya no se encuentra disponible." });
         }
 
