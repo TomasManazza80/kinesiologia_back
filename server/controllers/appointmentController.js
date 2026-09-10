@@ -2,6 +2,7 @@ import { AppDataSource } from '../database.js';
 import * as whatsappService from '../services/whatsappService.js';
 import { format, isValid } from 'date-fns';
 import es from 'date-fns/locale/es/index.js';
+import moment from 'moment-timezone';
 
 export async function createAppointment(req, res) {
   try {
@@ -19,11 +20,18 @@ export async function createAppointment(req, res) {
       return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece.' });
     }
 
+    // Parse fecha_hora explicitly in Argentina timezone and save as ISO string to avoid local timezone issues
+    const fechaHoraParsed = moment.tz(fecha_hora, 'America/Argentina/Buenos_Aires').toISOString();
+    let endTimeParsed = null;
+    if (end_time) {
+      endTimeParsed = moment.tz(end_time, 'America/Argentina/Buenos_Aires').toISOString();
+    }
+
     const newAppointment = appointmentRepo.create({
       patient: { id: parseInt(patient_id) },
       professional: { id: professionalId },
-      fecha_hora,
-      end_time,
+      fecha_hora: fechaHoraParsed,
+      end_time: endTimeParsed,
       motivo
     });
 
@@ -36,8 +44,10 @@ export async function createAppointment(req, res) {
         if (prof?.whatsapp_connected && prof?.whatsapp_message_template) {
             let msg = prof.whatsapp_message_template;
             msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
-            msg = msg.replace(/{{date}}/g, format(new Date(fecha_hora), "dd 'de' MMMM", { locale: es }));
-            msg = msg.replace(/{{time}}/g, format(new Date(fecha_hora), 'HH:mm'));
+            const dateObj = moment(fecha_hora).tz('America/Argentina/Buenos_Aires');
+            dateObj.locale('es');
+            msg = msg.replace(/{{date}}/g, dateObj.format('DD [de] MMMM'));
+            msg = msg.replace(/{{time}}/g, dateObj.format('HH:mm'));
             msg = msg.replace(/{{service}}/g, motivo || 'Turno');
             msg = msg.replace(/{{professional_name}}/g, prof.name || '');
 
@@ -103,7 +113,13 @@ export async function updateAppointment(req, res) {
       return res.status(403).json({ error: 'Forbidden: El turno no existe o no tienes permisos para editarlo.' });
     }
 
-    appointmentRepo.merge(appointment, { estado, fecha_hora, motivo });
+    let updateData = { estado, motivo };
+    
+    if (fecha_hora) {
+      updateData.fecha_hora = moment.tz(fecha_hora, 'America/Argentina/Buenos_Aires').toISOString();
+    }
+
+    appointmentRepo.merge(appointment, updateData);
     await appointmentRepo.save(appointment);
     res.json(appointment);
   } catch (error) {

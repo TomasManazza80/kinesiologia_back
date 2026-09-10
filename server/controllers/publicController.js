@@ -106,12 +106,12 @@ export const getAvailableSlots = async (req, res) => {
             const endTime = moment.tz(`${date} ${schedule.end_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
 
             while (currentSlot.isBefore(endTime)) {
-                const slotStart = currentSlot.toDate();
-                const slotEnd = moment(currentSlot).add(slotDurationMinutes, 'minutes').toDate();
+                const slotStart = currentSlot.toISOString();
+                const slotEnd = moment(currentSlot).add(slotDurationMinutes, 'minutes').toISOString();
                 
                 // Check if this slot overlaps with any existing appointment
                 const isOverlapping = validAppointments.some(app => {
-                    const appStart = moment(app.fecha_hora).toDate();
+                    const appStart = moment(app.fecha_hora).toISOString();
                     // Assume appointment lasts 30 mins if end_time is not set
                     const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
                     
@@ -145,7 +145,7 @@ export const createPublicAppointment = async (req, res) => {
         }
 
         const profId = professional_id;
-        const fechaHora = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires').toDate();
+        const fechaHora = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires').toISOString();
         
         const patientRepo = AppDataSource.getRepository('Patient');
         const appointmentRepo = AppDataSource.getRepository('Appointment');
@@ -173,7 +173,7 @@ export const createPublicAppointment = async (req, res) => {
                 break;
             }
         }
-        const endTime = moment(fechaHora).add(duration, 'minutes').toDate();
+        const endTime = moment(fechaHora).add(duration, 'minutes').toISOString();
 
         // Check if patient exists by DNI or name for this professional
         let patient = await patientRepo.findOne({
@@ -230,8 +230,8 @@ export const createPublicAppointment = async (req, res) => {
             where: {
                 professional: { id: profId },
                 fecha_hora: Between(
-                    moment(fechaHora).subtract(1, 'minutes').toDate(), 
-                    moment(endTime).subtract(1, 'minutes').toDate()
+                    moment(fechaHora).subtract(1, 'minutes').toISOString(), 
+                    moment(endTime).subtract(1, 'minutes').toISOString()
                 )
             }
         });
@@ -266,7 +266,7 @@ export const createPublicAppointment = async (req, res) => {
             if (prof?.whatsapp_connected && prof?.whatsapp_message_template) {
                 let msg = prof.whatsapp_message_template;
                 msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
-                const dateObj = moment(fechaHora);
+                const dateObj = moment(fechaHora).tz('America/Argentina/Buenos_Aires');
                 dateObj.locale('es');
                 msg = msg.replace(/{{date}}/g, dateObj.format('DD [de] MMMM'));
                 msg = msg.replace(/{{time}}/g, dateObj.format('HH:mm'));

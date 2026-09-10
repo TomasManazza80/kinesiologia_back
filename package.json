@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server/server.js",
-    "start": "node server/server.js",
-    "start:server": "nodemon --ignore whatsapp_sessions/ server/server.js",
-    "seed:demo": "node seedDemonstration.js",
+    "start": "cross-env TZ=UTC node server/server.js",
+    "start:server": "cross-env TZ=UTC nodemon --ignore whatsapp_sessions/ server/server.js",
+    "seed:demo": "cross-env TZ=UTC node seedDemonstration.js",
     "build": "echo \"No build step required\"",
     "lint": "eslint . --ext ts,tsx,js,jsx --report-unused-disable-directives --max-warnings 0"
   },
@@ -44,6 +44,7 @@
     "clsx": "^2.1.0",
     "cmdk": "^0.2.1",
     "cors": "^2.8.5",
+    "cross-env": "^10.1.0",
     "date-fns": "^2.30.0",
     "dotenv": "^16.4.1",
     "embla-carousel-react": "^8.0.0",
