@@ -22,6 +22,7 @@ export const UserSchema = new EntitySchema({
     is_public: { type: 'boolean', default: false, nullable: true },
     whatsapp_connected: { type: 'boolean', default: false, nullable: true },
     whatsapp_message_template: { type: 'text', nullable: true },
+    is_active: { type: 'boolean', default: true, nullable: true },
   },
   relations: {
     patients: { target: 'Patient', type: 'many-to-many', inverseSide: 'professionals' },

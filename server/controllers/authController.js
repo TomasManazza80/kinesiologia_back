@@ -45,7 +45,7 @@ export async function login(req, res) {
             where: { email: email },
         });
 
-        if (!user || !await bcrypt.compare(password, user.password)) {
+        if (!user || user.is_active === false || !await bcrypt.compare(password, user.password)) {
             return res.status(401).json({ message: "Invalid email or password" });
         }
 

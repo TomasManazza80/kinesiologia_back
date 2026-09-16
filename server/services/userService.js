@@ -7,7 +7,7 @@ function getUserRepo() {
 
 export async function getAllUsers() {
     return getUserRepo().find({
-        select: { id: true, email: true, name: true, role: true, specialty: true, createdAt: true, updatedAt: true }
+        select: { id: true, email: true, name: true, role: true, specialty: true, createdAt: true, updatedAt: true, is_active: true }
     });
 }
 
@@ -22,7 +22,7 @@ export async function getProfessionals() {
         select: { 
             id: true, email: true, name: true, specialty: true, role: true, 
             session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true,
-            createdAt: true, updatedAt: true
+            createdAt: true, updatedAt: true, is_active: true
         }
     });
 }
@@ -31,7 +31,7 @@ export async function getUserById(id) {
     return getUserRepo().findOne({
         where: { id },
         relations: { patients: true },
-        select: { id: true, email: true, name: true, role: true, specialty: true, session_fee: true, require_payment: true, mp_access_token: true, createdAt: true, updatedAt: true, profile_picture: true, is_public: true }
+        select: { id: true, email: true, name: true, role: true, specialty: true, session_fee: true, require_payment: true, mp_access_token: true, createdAt: true, updatedAt: true, profile_picture: true, is_public: true, is_active: true }
     });
 }
 
@@ -78,7 +78,7 @@ export async function updateUserRole(id, role) {
 export async function updateUser(id, updateData) {
     const allowedFields = [
         'name', 'email', 'role', 'specialty', 'session_fee', 
-        'require_payment', 'mp_access_token', 'profile_picture', 'is_public'
+        'require_payment', 'mp_access_token', 'profile_picture', 'is_public', 'is_active'
     ];
 
     const cleanData = {};
@@ -96,46 +96,22 @@ export async function updateUser(id, updateData) {
     
     return getUserRepo().findOne({
         where: { id },
-        select: { id: true, email: true, name: true, role: true, specialty: true, session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true }
+        select: { id: true, email: true, name: true, role: true, specialty: true, session_fee: true, require_payment: true, mp_access_token: true, profile_picture: true, is_public: true, is_active: true }
     });
 }
 
 export async function deleteUser(id) {
     const userRepo = getUserRepo();
     const user = await userRepo.findOne({
-        where: { id: parseInt(id) },
-        relations: { patients: true }
+        where: { id: parseInt(id) }
     });
 
     if (!user) return null;
 
-    // Clear many-to-many relationship with patients
-    if (user.patients && user.patients.length > 0) {
-        user.patients = [];
-        await userRepo.save(user);
-    }
-
-    try {
-        const availabilityRepo = AppDataSource.getRepository('Availability');
-        await availabilityRepo.delete({ professional: { id: parseInt(id) } });
-    } catch (e) { console.error("Error clearing availability on delete:", e); }
-
-    try {
-        const appointmentRepo = AppDataSource.getRepository('Appointment');
-        await appointmentRepo.delete({ professional: { id: parseInt(id) } });
-    } catch (e) { console.error("Error clearing appointments on delete:", e); }
-
-    try {
-        const medicalHistoryRepo = AppDataSource.getRepository('MedicalHistory');
-        await medicalHistoryRepo.delete({ professional: { id: parseInt(id) } });
-    } catch (e) { console.error("Error clearing medical history on delete:", e); }
-
-    try {
-        const transactionRepo = AppDataSource.getRepository('Transaction');
-        await transactionRepo.delete({ professional: { id: parseInt(id) } });
-    } catch (e) { console.error("Error clearing transactions on delete:", e); }
-
-    return userRepo.delete(parseInt(id));
+    user.is_active = false;
+    await userRepo.save(user);
+    
+    return user;
 }
 
 export async function verifyUserPassword(userId, password) {

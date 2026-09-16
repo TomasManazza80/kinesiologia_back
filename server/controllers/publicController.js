@@ -12,7 +12,7 @@ export const getPublicProfessionals = async (req, res) => {
     try {
         const professionals = await userService.getProfessionals();
         const publicProfessionals = professionals
-            .filter(p => p.is_public === true)
+            .filter(p => p.is_public === true && p.is_active !== false)
             .map(p => ({
                 id: p.id,
                 name: p.name,
