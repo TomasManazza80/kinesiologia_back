@@ -68,8 +68,8 @@ export async function createAppointment(req, res) {
     if (patient.datos_contacto?.telefono || patient.datos_contacto?.phone) {
         const userRepo = AppDataSource.getRepository('User');
         const prof = await userRepo.findOne({ where: { id: professionalId } });
-        if (prof?.whatsapp_connected && prof?.whatsapp_message_template) {
-            let msg = prof.whatsapp_message_template;
+        if (prof?.whatsapp_connected) {
+            let msg = prof.whatsapp_message_template || "Hola {{patient_name}}, somos del equipo de PAUSES. Te confirmamos tu turno de {{service}} con {{professional_name}} para el día {{date}} a las {{time}} hs.\n\nTe esperamos. En caso de no poder asistir, por favor avisar con al menos 1 hora de anticipación. ¡Muchas gracias!";
             msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
             const dateObj = moment(fecha_hora).tz('America/Argentina/Buenos_Aires');
             dateObj.locale('es');

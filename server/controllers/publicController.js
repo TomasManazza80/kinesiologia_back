@@ -30,60 +30,47 @@ export const getPublicProfessionals = async (req, res) => {
 
 export const getAvailableSlots = async (req, res) => {
     try {
-        const { professional_id, date, service } = req.query; // date should be YYYY-MM-DD
+        const { professional_id, date, start_date, end_date, service } = req.query;
         
-        if (!professional_id || !date) {
-            return res.status(400).json({ message: "professional_id and date are required" });
+        if (!professional_id) {
+            return res.status(400).json({ message: "professional_id is required" });
+        }
+        if (!date && (!start_date || !end_date)) {
+            return res.status(400).json({ message: "date or (start_date and end_date) are required" });
         }
 
         const profId = professional_id;
-        const requestDate = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
-        
-        if (!requestDate.isValid()) {
+        const availabilityRepo = AppDataSource.getRepository('Availability');
+        const appointmentRepo = AppDataSource.getRepository('Appointment');
+        const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+        // Determine the date range
+        let startDateObj, endDateObj;
+        if (date) {
+            startDateObj = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
+            endDateObj = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
+        } else {
+            startDateObj = moment.tz(start_date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
+            endDateObj = moment.tz(end_date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
+        }
+
+        if (!startDateObj.isValid() || !endDateObj.isValid()) {
             return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
         }
 
-        // Determine day of week in Spanish to match Availability schema
-        // moment.day() returns 0 (Sunday) to 6 (Saturday)
-        const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        const dayOfWeek = daysMap[requestDate.day()];
-
-        const availabilityRepo = AppDataSource.getRepository('Availability');
-        const appointmentRepo = AppDataSource.getRepository('Appointment');
-
-        // Fetch regular availability for this professional on this day of week
-        // Note: we should also fetch exceptions for this specific date
-        const availabilities = await availabilityRepo.find({
-            where: [
-                { professional: { id: profId }, day_of_week: dayOfWeek, is_exception: false },
-                { professional: { id: profId }, exception_date: requestDate.toDate(), is_exception: true }
-            ]
+        // Fetch all regular availability and exceptions for this professional
+        const allAvailabilities = await availabilityRepo.find({
+            where: { professional: { id: profId } }
         });
 
-        // Check if there's an exception block for this date that means "Not available" 
-        // If an exception exists, maybe it overrides the regular schedule.
-        // For simplicity, let's assume exceptions with no start/end time mean full day off.
-        const exception = availabilities.find(a => a.is_exception);
-        if (exception && !exception.start_time) {
-            return res.status(200).json({ data: [] }); // Not available all day
-        }
-
-        const regularSchedules = availabilities.filter(a => !a.is_exception);
-
-        // Fetch existing appointments for this professional on this date
-        const startOfDay = requestDate.startOf('day').toDate();
-        const endOfDay = requestDate.endOf('day').toDate();
-
+        // Fetch all appointments in the range
         const existingAppointments = await appointmentRepo.find({
             where: {
                 professional: { id: profId },
-                fecha_hora: Between(startOfDay, endOfDay)
-                // we should probably exclude 'cancelado' state
+                fecha_hora: Between(startDateObj.startOf('day').toDate(), endDateObj.endOf('day').toDate())
             }
         });
 
-        // Filter out cancelled appointments from blocking logic
-        // Also filter out 'pendiente_pago' appointments older than 15 mins (auto-expired)
         const validAppointments = existingAppointments.filter(app => {
             if (app.estado === 'cancelado') return false;
             if (app.estado === 'pendiente_pago') {
@@ -95,41 +82,62 @@ export const getAvailableSlots = async (req, res) => {
             return true;
         });
 
-        // Generate slots
-        let availableSlots = [];
+        const result = {};
+        let current = moment(startDateObj);
 
-        for (const schedule of regularSchedules) {
-            if (!schedule.start_time || !schedule.end_time) continue;
+        while (current.isSameOrBefore(endDateObj, 'day')) {
+            const currentDateStr = current.format('YYYY-MM-DD');
+            const dayOfWeek = daysMap[current.day()];
             
-            const slotDurationMinutes = schedule.session_duration || 30;
-            let currentSlot = moment.tz(`${date} ${schedule.start_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
-            const endTime = moment.tz(`${date} ${schedule.end_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
+            const dayAvailabilities = allAvailabilities.filter(a => 
+                (a.is_exception === false && a.day_of_week === dayOfWeek) ||
+                (a.is_exception === true && moment(a.exception_date).format('YYYY-MM-DD') === currentDateStr)
+            );
 
-            while (currentSlot.isBefore(endTime)) {
-                const slotStart = currentSlot.toISOString();
-                const slotEnd = moment(currentSlot).add(slotDurationMinutes, 'minutes').toISOString();
-                
-                // Check if this slot overlaps with any existing appointment
-                const isOverlapping = validAppointments.some(app => {
-                    const appStart = moment(app.fecha_hora).toISOString();
-                    // Assume appointment lasts 30 mins if end_time is not set
-                    const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
-                    
-                    return (slotStart < appEnd && slotEnd > appStart);
-                });
-
-                if (!isOverlapping) {
-                    availableSlots.push(currentSlot.format('HH:mm'));
-                }
-
-                currentSlot.add(slotDurationMinutes, 'minutes');
+            const exception = dayAvailabilities.find(a => a.is_exception);
+            if (exception && !exception.start_time) {
+                result[currentDateStr] = []; // Not available all day
+                current.add(1, 'day');
+                continue;
             }
+
+            const regularSchedules = dayAvailabilities.filter(a => !a.is_exception);
+            let availableSlots = [];
+
+            for (const schedule of regularSchedules) {
+                if (!schedule.start_time || !schedule.end_time) continue;
+                
+                const slotDurationMinutes = schedule.session_duration || 30;
+                let currentSlot = moment.tz(`${currentDateStr} ${schedule.start_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
+                const endTime = moment.tz(`${currentDateStr} ${schedule.end_time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires');
+
+                while (currentSlot.isBefore(endTime)) {
+                    const slotStart = currentSlot.toDate();
+                    const slotEnd = moment(currentSlot).add(slotDurationMinutes, 'minutes').toDate();
+                    
+                    const isOverlapping = validAppointments.some(app => {
+                        const appStart = moment(app.fecha_hora).toDate();
+                        const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
+                        return (slotStart < appEnd && slotEnd > appStart);
+                    });
+
+                    if (!isOverlapping) {
+                        availableSlots.push(currentSlot.format('HH:mm'));
+                    }
+                    currentSlot.add(slotDurationMinutes, 'minutes');
+                }
+            }
+
+            result[currentDateStr] = [...new Set(availableSlots)].sort();
+            current.add(1, 'day');
         }
 
-        // Sort slots and remove duplicates if any overlapping schedules exist
-        availableSlots = [...new Set(availableSlots)].sort();
-
-        res.status(200).json({ data: availableSlots });
+        // Return array if single date was requested (backward compatibility)
+        if (date) {
+            res.status(200).json({ data: result[date] || [] });
+        } else {
+            res.status(200).json({ data: result });
+        }
     } catch (error) {
         console.error("Error getting available slots:", error);
         res.status(500).json({ message: "Error calculating availability", details: error.message });
@@ -275,8 +283,8 @@ export const createPublicAppointment = async (req, res) => {
 
         // --- WHATSAPP INTEGRATION ---
         if (patient_phone) {
-            if (prof?.whatsapp_connected && prof?.whatsapp_message_template) {
-                let msg = prof.whatsapp_message_template;
+            if (prof?.whatsapp_connected) {
+                let msg = prof.whatsapp_message_template || "Hola {{patient_name}}, somos del equipo de PAUSES. Te confirmamos tu turno de {{service}} con {{professional_name}} para el día {{date}} a las {{time}} hs.\n\nTe esperamos. En caso de no poder asistir, por favor avisar con al menos 1 hora de anticipación. ¡Muchas gracias!";
                 msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
                 const dateObj = moment(fechaHora).tz('America/Argentina/Buenos_Aires');
                 dateObj.locale('es');

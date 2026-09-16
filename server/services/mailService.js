@@ -1,33 +1,32 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
 
-const API_KEY = 'XYZ'
+dotenv.config();
 
-const resend = new Resend(API_KEY);
-
-resend.domains.create({
-    name: "realtorrocket.app",
-})
-
+const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // true for port 465
+    auth: {
+        user: process.env.SMTP_USER, // Tu correo personal de Gmail
+        pass: process.env.SMTP_PASS  // Tu "Contraseña de Aplicación" de Google
+    }
+});
 
 export const sendEmail = async (to, subject, html) => {
     try {
-        return await resend.emails.send({
-            from: "Realtor Rocket <support@realtorrocket.app>",
-            to: [to],
+        const info = await transporter.sendMail({
+            from: `"Realtor Rocket" <${process.env.SMTP_USER}>`,
+            to: to,
             subject: subject,
             html: html
         });
+        
+        console.log("Correo enviado exitosamente: %s", info.messageId);
+        return { success: true, data: info };
     }
     catch (error) {
-        console.log(error);
-        return error;
+        console.error("Error al enviar el correo:", error);
+        throw error;
     }
 };
-
-/*
-sendEmail("pablotanner@hotmail.ch", "Test222", "<h1>Test222</h1>").then((response) => {
-    console.log(response);
-}).catch((error) => {
-    console.log("err",error)
-})
- */
