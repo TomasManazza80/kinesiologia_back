@@ -15,6 +15,7 @@ export const AppointmentSchema = new EntitySchema({
     mp_preference_id: { type: 'varchar', nullable: true },
     payment_id: { type: 'varchar', nullable: true },
     cancel_reason: { type: 'varchar', nullable: true },
+    is_read: { type: 'boolean', default: false, nullable: true },
   },
   relations: {
     professional: {

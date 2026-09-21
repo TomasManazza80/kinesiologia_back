@@ -35,6 +35,8 @@ router.post('/patients/:id/share', authenticateToken, patientController.sharePat
 // Turnos
 router.post('/appointments', authenticateToken, appointmentController.createAppointment);
 router.get('/appointments', authenticateToken, appointmentController.getAppointments);
+router.get('/appointments/unread', authenticateToken, appointmentController.getUnreadAppointments);
+router.put('/appointments/mark-read', authenticateToken, appointmentController.markAppointmentsAsRead);
 router.get('/my-appointments', authenticateToken, appointmentController.getMyPatientAppointments);
 router.put('/appointments/:id', authenticateToken, appointmentController.updateAppointment);
 router.post('/appointments/:id/notify', authenticateToken, appointmentController.notifyAppointment);

@@ -10,59 +10,74 @@ export async function createAppointment(req, res) {
     const { patient_id, professional_id, fecha_hora, end_time, motivo } = req.body;
     const professionalId = (['ADMIN', 'EMPLOYEE'].includes(req.user.role) && professional_id) ? professional_id : req.user.userId;
     
-    const patientRepo = AppDataSource.getRepository('Patient');
-    const appointmentRepo = AppDataSource.getRepository('Appointment');
+    let newAppointment = null;
+    let patient = null;
 
-    const patient = await patientRepo.findOne({
-      where: { id: parseInt(patient_id) } // REMOVED professional: { id: professionalId } filter here to allow assigning to others, or we should leave it? Let's remove the filter since admin can assign.
-    });
-    
-    if (!patient) {
-      return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece.' });
-    }
+    await AppDataSource.transaction(async transactionalEntityManager => {
+        const userRepo = transactionalEntityManager.getRepository('User');
+        const patientRepo = transactionalEntityManager.getRepository('Patient');
+        const appointmentRepo = transactionalEntityManager.getRepository('Appointment');
 
-    // Parse fecha_hora explicitly in Argentina timezone and save as ISO string to avoid local timezone issues
-    const fechaHoraParsed = moment.tz(fecha_hora, 'America/Argentina/Buenos_Aires').toISOString();
-    let endTimeParsed = null;
-    if (end_time) {
-      endTimeParsed = moment.tz(end_time, 'America/Argentina/Buenos_Aires').toISOString();
-    }
-
-    // Check for overlapping appointments
-    const startOfDay = moment(fechaHoraParsed).startOf('day').toDate();
-    const endOfDay = moment(fechaHoraParsed).endOf('day').toDate();
-
-    const dailyAppointments = await appointmentRepo.find({
-        where: {
-            professional: { id: professionalId },
-            fecha_hora: Between(startOfDay, endOfDay)
+        const prof = await userRepo.findOne({
+            where: { id: professionalId },
+            lock: { mode: "pessimistic_write" }
+        });
+        
+        if (!prof) {
+             throw new Error("PROFESSIONAL_NOT_FOUND");
         }
+
+        patient = await patientRepo.findOne({
+          where: { id: parseInt(patient_id) } 
+        });
+        
+        if (!patient) {
+          throw new Error("PATIENT_NOT_FOUND");
+        }
+
+        // Parse fecha_hora explicitly in Argentina timezone and save as ISO string to avoid local timezone issues
+        const fechaHoraParsed = moment.tz(fecha_hora, 'America/Argentina/Buenos_Aires').toISOString();
+        let endTimeParsed = null;
+        if (end_time) {
+          endTimeParsed = moment.tz(end_time, 'America/Argentina/Buenos_Aires').toISOString();
+        }
+
+        // Check for overlapping appointments
+        const startOfDay = moment(fechaHoraParsed).startOf('day').toDate();
+        const endOfDay = moment(fechaHoraParsed).endOf('day').toDate();
+
+        const dailyAppointments = await appointmentRepo.find({
+            where: {
+                professional: { id: professionalId },
+                fecha_hora: Between(startOfDay, endOfDay)
+            }
+        });
+
+        const validAppointments = dailyAppointments.filter(app => app.estado !== 'cancelado');
+
+        const newStart = moment(fechaHoraParsed).toDate();
+        const newEnd = endTimeParsed ? moment(endTimeParsed).toDate() : moment(fechaHoraParsed).add(30, 'minutes').toDate();
+
+        const isOverlapping = validAppointments.some(app => {
+            const appStart = moment(app.fecha_hora).toDate();
+            const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
+            return (newStart < appEnd && newEnd > appStart);
+        });
+
+        if (isOverlapping) {
+            throw new Error("OVERLAPPING_APPOINTMENT");
+        }
+
+        newAppointment = appointmentRepo.create({
+          patient: { id: parseInt(patient_id) },
+          professional: { id: professionalId },
+          fecha_hora: fechaHoraParsed,
+          end_time: endTimeParsed,
+          motivo
+        });
+
+        await appointmentRepo.save(newAppointment);
     });
-
-    const validAppointments = dailyAppointments.filter(app => app.estado !== 'cancelado');
-
-    const newStart = moment(fechaHoraParsed).toDate();
-    const newEnd = endTimeParsed ? moment(endTimeParsed).toDate() : moment(fechaHoraParsed).add(30, 'minutes').toDate();
-
-    const isOverlapping = validAppointments.some(app => {
-        const appStart = moment(app.fecha_hora).toDate();
-        const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
-        return (newStart < appEnd && newEnd > appStart);
-    });
-
-    if (isOverlapping) {
-        return res.status(409).json({ error: 'Ya existe un turno en este horario. Para agendar un turno nuevo, primero debe eliminar o reprogramar el existente.' });
-    }
-
-    const newAppointment = appointmentRepo.create({
-      patient: { id: parseInt(patient_id) },
-      professional: { id: professionalId },
-      fecha_hora: fechaHoraParsed,
-      end_time: endTimeParsed,
-      motivo
-    });
-
-    await appointmentRepo.save(newAppointment);
 
     // --- WHATSAPP INTEGRATION ---
     if (patient.datos_contacto?.telefono || patient.datos_contacto?.phone) {
@@ -86,6 +101,10 @@ export async function createAppointment(req, res) {
 
     res.status(201).json(newAppointment);
   } catch (error) {
+    if (error.message === "PROFESSIONAL_NOT_FOUND") return res.status(404).json({ error: 'Profesional no encontrado' });
+    if (error.message === "PATIENT_NOT_FOUND") return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece.' });
+    if (error.message === "OVERLAPPING_APPOINTMENT") return res.status(409).json({ error: 'Ya existe un turno en este horario. Para agendar un turno nuevo, primero debe eliminar o reprogramar el existente.' });
+
     res.status(500).json({ error: 'Error al crear turno', details: error.message });
   }
 };
@@ -316,3 +335,41 @@ export async function notifyAppointment(req, res) {
   }
 };
 
+export async function getUnreadAppointments(req, res) {
+  try {
+    const appointmentRepo = AppDataSource.getRepository('Appointment');
+    const appointments = await appointmentRepo.find({
+      where: {
+        professional: { id: req.user.userId },
+        is_read: false
+      },
+      order: { createdAt: 'DESC' },
+      relations: { patient: true }
+    });
+    res.json(appointments);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener turnos no leídos', details: error.message });
+  }
+}
+
+export async function markAppointmentsAsRead(req, res) {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ error: 'Se requiere un arreglo de IDs' });
+    }
+    const appointmentRepo = AppDataSource.getRepository('Appointment');
+    
+    // Solo actualizamos los turnos que pertenecen a este profesional
+    await AppDataSource.createQueryBuilder()
+      .update('Appointment')
+      .set({ is_read: true })
+      .where("id IN (:...ids)", { ids })
+      .andWhere("professional_id = :profId", { profId: req.user.userId })
+      .execute();
+
+    res.json({ message: 'Turnos marcados como leídos' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar turnos', details: error.message });
+  }
+}

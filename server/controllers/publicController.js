@@ -155,153 +155,165 @@ export const createPublicAppointment = async (req, res) => {
         const profId = professional_id;
         const fechaHora = moment.tz(`${date} ${time}`, 'YYYY-MM-DD HH:mm', 'America/Argentina/Buenos_Aires').toISOString();
         
-        const patientRepo = AppDataSource.getRepository('Patient');
-        const appointmentRepo = AppDataSource.getRepository('Appointment');
-        const availabilityRepo = AppDataSource.getRepository('Availability');
-        const userRepo = AppDataSource.getRepository('User');
+        let newAppointment = null;
+        let finalProf = null;
+        let finalPatient = null;
 
-        const prof = await userRepo.findOne({ where: { id: profId } });
-        if (!prof) {
-            return res.status(404).json({ message: "Professional not found" });
-        }
+        await AppDataSource.transaction(async transactionalEntityManager => {
+            const patientRepo = transactionalEntityManager.getRepository('Patient');
+            const appointmentRepo = transactionalEntityManager.getRepository('Appointment');
+            const availabilityRepo = transactionalEntityManager.getRepository('Availability');
+            const userRepo = transactionalEntityManager.getRepository('User');
 
-        // Determinar duración de la sesión según disponibilidad
-        const requestDate = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
-        const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        const dayOfWeek = daysMap[requestDate.day()];
-        
-        const availabilities = await availabilityRepo.find({
-            where: { professional: { id: profId }, day_of_week: dayOfWeek, is_exception: false }
-        });
-
-        let duration = 30; // Default fallback
-        for (const a of availabilities) {
-            if (time >= a.start_time && time < a.end_time) {
-                duration = a.session_duration || 30;
-                break;
-            }
-        }
-        const endTime = moment(fechaHora).add(duration, 'minutes').toISOString();
-
-        // Check if patient exists by DNI or name for this professional
-        let patient = await patientRepo.findOne({
-            where: [
-                { dni: patient_dni, professionals: { id: profId } },
-                { nombre: patient_name, professionals: { id: profId } }
-            ]
-        });
-
-        if (!patient) {
-            patient = patientRepo.create({
-                nombre: patient_name,
-                dni: patient_dni,
-                email: patient_email,
-                datos_contacto: { telefono: patient_phone, email: patient_email },
-                professionals: [{ id: profId }],
-                status: 'activo',
-                absence_streak: 0
+            const prof = await userRepo.findOne({ 
+                where: { id: profId },
+                lock: { mode: "pessimistic_write" }
             });
-            patient = await patientRepo.save(patient);
-        } else {
-            // Update DNI if missing
-            if (!patient.dni && patient_dni) {
-                patient.dni = patient_dni;
-                await patientRepo.save(patient);
+            
+            if (!prof) {
+                throw new Error("PROFESSIONAL_NOT_FOUND");
             }
-            // Check if patient is banned
-            if (patient.ban_until && moment(patient.ban_until).isAfter(moment())) {
-                return res.status(403).json({ message: "Debe esperar una semana para poder sacar turno debido a reiteradas inasistencias." });
-            }
-        }
+            finalProf = prof;
 
-        // Si se proveyó contraseña y email, intentar crear un usuario para que pueda ver sus turnos
-        if (password && patient_email) {
-            const existingUser = await userRepo.findOne({ where: { email: patient_email } });
-            if (!existingUser) {
-                const hashedPassword = await bcrypt.hash(password, 10);
-                const newUser = userRepo.create({
-                    email: patient_email,
-                    password: hashedPassword,
-                    name: patient_name,
-                    role: 'USER'
-                });
-                await userRepo.save(newUser);
-            }
-        }
+            // Determinar duración de la sesión según disponibilidad
+            const requestDate = moment.tz(date, 'YYYY-MM-DD', 'America/Argentina/Buenos_Aires');
+            const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const dayOfWeek = daysMap[requestDate.day()];
+            
+            const availabilities = await availabilityRepo.find({
+                where: { professional: { id: profId }, day_of_week: dayOfWeek, is_exception: false }
+            });
 
-        if (prof.require_payment && prof.session_fee > 0 && !prof.mp_access_token) {
-            return res.status(400).json({ message: "El profesional requiere pago pero no tiene configurado su token de MercadoPago. No se puede reservar." });
-        }
-
-        // Double check if slot is still free to prevent double booking
-        const startOfDay = moment(fechaHora).startOf('day').toDate();
-        const endOfDay = moment(fechaHora).endOf('day').toDate();
-
-        const dailyAppointments = await appointmentRepo.find({
-            where: {
-                professional: { id: profId },
-                fecha_hora: Between(startOfDay, endOfDay)
-            }
-        });
-
-        const validAppointments = dailyAppointments.filter(app => {
-            if (app.estado === 'cancelado') return false;
-            if (app.estado === 'pendiente_pago') {
-                const createdAt = moment(app.createdAt);
-                if (moment().diff(createdAt, 'minutes') > 15) {
-                    return false;
+            let duration = 30; // Default fallback
+            for (const a of availabilities) {
+                if (time >= a.start_time && time < a.end_time) {
+                    duration = a.session_duration || 30;
+                    break;
                 }
             }
-            return true;
+            const endTime = moment(fechaHora).add(duration, 'minutes').toISOString();
+
+            // Check if patient exists by DNI or name for this professional
+            let patient = await patientRepo.findOne({
+                where: [
+                    { dni: patient_dni, professionals: { id: profId } },
+                    { nombre: patient_name, professionals: { id: profId } }
+                ]
+            });
+
+            if (!patient) {
+                patient = patientRepo.create({
+                    nombre: patient_name,
+                    dni: patient_dni,
+                    email: patient_email,
+                    datos_contacto: { telefono: patient_phone, email: patient_email },
+                    professionals: [{ id: profId }],
+                    status: 'activo',
+                    absence_streak: 0
+                });
+                patient = await patientRepo.save(patient);
+            } else {
+                // Update DNI if missing
+                if (!patient.dni && patient_dni) {
+                    patient.dni = patient_dni;
+                    await patientRepo.save(patient);
+                }
+                // Check if patient is banned
+                if (patient.ban_until && moment(patient.ban_until).isAfter(moment())) {
+                    throw new Error("PATIENT_BANNED");
+                }
+            }
+            finalPatient = patient;
+
+            // Si se proveyó contraseña y email, intentar crear un usuario para que pueda ver sus turnos
+            if (password && patient_email) {
+                const existingUser = await userRepo.findOne({ where: { email: patient_email } });
+                if (!existingUser) {
+                    const hashedPassword = await bcrypt.hash(password, 10);
+                    const newUser = userRepo.create({
+                        email: patient_email,
+                        password: hashedPassword,
+                        name: patient_name,
+                        role: 'USER'
+                    });
+                    await userRepo.save(newUser);
+                }
+            }
+
+            if (prof.require_payment && prof.session_fee > 0 && !prof.mp_access_token) {
+                throw new Error("PAYMENT_REQUIRED_NO_TOKEN");
+            }
+
+            // Double check if slot is still free to prevent double booking
+            const startOfDay = moment(fechaHora).startOf('day').toDate();
+            const endOfDay = moment(fechaHora).endOf('day').toDate();
+
+            const dailyAppointments = await appointmentRepo.find({
+                where: {
+                    professional: { id: profId },
+                    fecha_hora: Between(startOfDay, endOfDay)
+                }
+            });
+
+            const validAppointments = dailyAppointments.filter(app => {
+                if (app.estado === 'cancelado') return false;
+                if (app.estado === 'pendiente_pago') {
+                    const createdAt = moment(app.createdAt);
+                    if (moment().diff(createdAt, 'minutes') > 15) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            const newStart = moment(fechaHora).toDate();
+            const newEnd = moment(endTime).toDate();
+
+            const isOverlapping = validAppointments.some(app => {
+                const appStart = moment(app.fecha_hora).toDate();
+                const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
+                
+                // Formula for overlapping intervals: (StartA < EndB) && (EndA > StartB)
+                return (newStart < appEnd && newEnd > appStart);
+            });
+
+            if (isOverlapping) {
+                throw new Error("OVERLAPPING_APPOINTMENT");
+            }
+
+            newAppointment = appointmentRepo.create({
+                patient: { id: patient.id },
+                professional: { id: profId },
+                fecha_hora: fechaHora,
+                end_time: endTime,
+                motivo: service,
+                estado: (prof.require_payment && prof.session_fee > 0 && prof.mp_access_token) ? 'pendiente_pago' : 'pendiente'
+            });
+
+            await appointmentRepo.save(newAppointment);
         });
-
-        const newStart = moment(fechaHora).toDate();
-        const newEnd = moment(endTime).toDate();
-
-        const isOverlapping = validAppointments.some(app => {
-            const appStart = moment(app.fecha_hora).toDate();
-            const appEnd = app.end_time ? moment(app.end_time).toDate() : moment(appStart).add(30, 'minutes').toDate();
-            
-            // Formula for overlapping intervals: (StartA < EndB) && (EndA > StartB)
-            return (newStart < appEnd && newEnd > appStart);
-        });
-
-        if (isOverlapping) {
-            return res.status(409).json({ message: "El turno ya no se encuentra disponible." });
-        }
-
-        const newAppointment = appointmentRepo.create({
-            patient: { id: patient.id },
-            professional: { id: profId },
-            fecha_hora: fechaHora,
-            end_time: endTime,
-            motivo: service,
-            estado: (prof.require_payment && prof.session_fee > 0 && prof.mp_access_token) ? 'pendiente_pago' : 'pendiente'
-        });
-
-        await appointmentRepo.save(newAppointment);
 
         // --- WHATSAPP INTEGRATION ---
         if (patient_phone) {
-            if (prof?.whatsapp_connected) {
-                let msg = prof.whatsapp_message_template || "Hola {{patient_name}}, somos del equipo de PAUSES. Te confirmamos tu turno de {{service}} con {{professional_name}} para el día {{date}} a las {{time}} hs.\n\nTe esperamos. En caso de no poder asistir, por favor avisar con al menos 1 hora de anticipación. ¡Muchas gracias!";
-                msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
+            if (finalProf?.whatsapp_connected) {
+                let msg = finalProf.whatsapp_message_template || "Hola {{patient_name}}, somos del equipo de PAUSES. Te confirmamos tu turno de {{service}} con {{professional_name}} para el día {{date}} a las {{time}} hs.\n\nTe esperamos. En caso de no poder asistir, por favor avisar con al menos 1 hora de anticipación. ¡Muchas gracias!";
+                msg = msg.replace(/{{patient_name}}/g, finalPatient.nombre || '');
                 const dateObj = moment(fechaHora).tz('America/Argentina/Buenos_Aires');
                 dateObj.locale('es');
                 msg = msg.replace(/{{date}}/g, dateObj.format('DD [de] MMMM'));
                 msg = msg.replace(/{{time}}/g, dateObj.format('HH:mm'));
                 msg = msg.replace(/{{service}}/g, service || 'Turno');
-                msg = msg.replace(/{{professional_name}}/g, prof.name || '');
+                msg = msg.replace(/{{professional_name}}/g, finalProf.name || '');
 
-                whatsappService.sendMessage(prof.id, patient_phone, msg);
+                whatsappService.sendMessage(finalProf.id, patient_phone, msg);
             }
         }
         // ----------------------------
 
         // MercadoPago Integration
-        if (prof.require_payment && prof.session_fee > 0 && prof.mp_access_token) {
+        if (finalProf.require_payment && finalProf.session_fee > 0 && finalProf.mp_access_token) {
             try {
-                const client = new MercadoPagoConfig({ accessToken: prof.mp_access_token });
+                const client = new MercadoPagoConfig({ accessToken: finalProf.mp_access_token });
                 const preference = new Preference(client);
 
                 const backendUrl = process.env.PUBLIC_BACKEND_URL || 'https://tu-ngrok-url.ngrok-free.app';
@@ -312,9 +324,9 @@ export const createPublicAppointment = async (req, res) => {
                         items: [
                             {
                                 id: newAppointment.id.toString(),
-                                title: `Turno con ${prof.name} - ${service}`,
+                                title: `Turno con ${finalProf.name} - ${service}`,
                                 quantity: 1,
-                                unit_price: Number(prof.session_fee),
+                                unit_price: Number(finalProf.session_fee),
                                 currency_id: 'ARS'
                             }
                         ],
@@ -324,11 +336,12 @@ export const createPublicAppointment = async (req, res) => {
                             pending: `${frontendUrl}/reservar?success=pending`
                         },
                         auto_return: 'approved',
-                        notification_url: `${backendUrl}/api/public/webhook/mercadopago?prof_id=${prof.id}`,
+                        notification_url: `${backendUrl}/api/public/webhook/mercadopago?prof_id=${finalProf.id}`,
                         external_reference: newAppointment.id.toString(),
                     }
                 });
 
+                const appointmentRepo = AppDataSource.getRepository('Appointment');
                 newAppointment.mp_preference_id = prefData.id;
                 await appointmentRepo.save(newAppointment);
 
@@ -341,6 +354,7 @@ export const createPublicAppointment = async (req, res) => {
                 console.error("MercadoPago Error:", mpError);
                 // Si falla MP, dejamos el turno como pendiente sin pago, o lo cancelamos.
                 // En este caso lo dejamos como pendiente para que puedan arreglarlo en persona.
+                const appointmentRepo = AppDataSource.getRepository('Appointment');
                 newAppointment.estado = 'pendiente';
                 await appointmentRepo.save(newAppointment);
                 return res.status(201).json({ message: "Turno reservado (Hubo un error con el pago online)", data: newAppointment });
@@ -349,6 +363,11 @@ export const createPublicAppointment = async (req, res) => {
 
         res.status(201).json({ message: "Turno reservado exitosamente", data: newAppointment });
     } catch (error) {
+        if (error.message === "PROFESSIONAL_NOT_FOUND") return res.status(404).json({ message: "Professional not found" });
+        if (error.message === "PATIENT_BANNED") return res.status(403).json({ message: "Debe esperar una semana para poder sacar turno debido a reiteradas inasistencias." });
+        if (error.message === "PAYMENT_REQUIRED_NO_TOKEN") return res.status(400).json({ message: "El profesional requiere pago pero no tiene configurado su token de MercadoPago. No se puede reservar." });
+        if (error.message === "OVERLAPPING_APPOINTMENT") return res.status(409).json({ message: "El turno ya no se encuentra disponible." });
+
         console.error("Error creating public appointment:", error);
         res.status(500).json({ message: "Error al crear turno", details: error.message });
     }
