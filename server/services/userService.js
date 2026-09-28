@@ -78,7 +78,7 @@ export async function updateUserRole(id, role) {
 export async function updateUser(id, updateData) {
     const allowedFields = [
         'name', 'email', 'role', 'specialty', 'session_fee', 
-        'require_payment', 'mp_access_token', 'profile_picture', 'is_public', 'is_active'
+        'require_payment', 'mp_access_token', 'profile_picture', 'is_public', 'is_active', 'password'
     ];
 
     const cleanData = {};
@@ -90,6 +90,10 @@ export async function updateUser(id, updateData) {
 
     if (cleanData.role) {
         cleanData.role = cleanData.role.toUpperCase();
+    }
+
+    if (cleanData.password) {
+        cleanData.password = await bcrypt.hash(cleanData.password, 10);
     }
     
     await getUserRepo().update(id, cleanData);

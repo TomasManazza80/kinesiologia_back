@@ -6,6 +6,7 @@ import { Between } from 'typeorm';
 import dotenv from 'dotenv';
 import * as whatsappService from '../services/whatsappService.js';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 dotenv.config();
 
 export const getPublicProfessionals = async (req, res) => {
@@ -158,6 +159,7 @@ export const createPublicAppointment = async (req, res) => {
         let newAppointment = null;
         let finalProf = null;
         let finalPatient = null;
+        let finalAuthUser = null;
 
         await AppDataSource.transaction(async transactionalEntityManager => {
             const patientRepo = transactionalEntityManager.getRepository('Patient');
@@ -225,18 +227,37 @@ export const createPublicAppointment = async (req, res) => {
             }
             finalPatient = patient;
 
-            // Si se proveyó contraseña y email, intentar crear un usuario para que pueda ver sus turnos
-            if (password && patient_email) {
-                const existingUser = await userRepo.findOne({ where: { email: patient_email } });
+            // Crear usuario automáticamente si hay email, para auto login
+            if (patient_email) {
+                let existingUser = await userRepo.findOne({ where: { email: patient_email } });
                 if (!existingUser) {
-                    const hashedPassword = await bcrypt.hash(password, 10);
+                    let hashedPassword = null;
+                    if (password) {
+                        hashedPassword = await bcrypt.hash(password, 10);
+                    }
                     const newUser = userRepo.create({
                         email: patient_email,
                         password: hashedPassword,
                         name: patient_name,
                         role: 'USER'
                     });
-                    await userRepo.save(newUser);
+                    existingUser = await userRepo.save(newUser);
+                    finalAuthUser = existingUser; // Auto-login para usuarios nuevos
+                } else {
+                    // El usuario ya existe
+                    if (password && !existingUser.password) {
+                        existingUser.password = await bcrypt.hash(password, 10);
+                        existingUser = await userRepo.save(existingUser);
+                        finalAuthUser = existingUser; // Auto-login porque acaba de establecer contraseña
+                    } else if (password && existingUser.password) {
+                        const isValid = await bcrypt.compare(password, existingUser.password);
+                        if (isValid) {
+                            finalAuthUser = existingUser; // Auto-login si mandó la contraseña correcta
+                        }
+                    }
+                    // Si el usuario existe, no mandó contraseña correcta o no mandó nada, 
+                    // NO seteamos finalAuthUser. Esto permite sacar el turno sin loguearlo,
+                    // evitando que vea turnos pasados sin autenticarse.
                 }
             }
 
@@ -310,6 +331,13 @@ export const createPublicAppointment = async (req, res) => {
         }
         // ----------------------------
 
+        let authData = {};
+        if (finalAuthUser) {
+            const accessToken = jwt.sign({ userId: finalAuthUser.id, email: finalAuthUser.email, role: finalAuthUser.role }, process.env.SECRET_KEY, { expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '1h' });
+            const refreshToken = jwt.sign({ userId: finalAuthUser.id, email: finalAuthUser.email, role: finalAuthUser.role }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d' });
+            authData = { accessToken, refreshToken, user: { id: finalAuthUser.id, role: finalAuthUser.role, email: finalAuthUser.email, name: finalAuthUser.name } };
+        }
+
         // MercadoPago Integration
         if (finalProf.require_payment && finalProf.session_fee > 0 && finalProf.mp_access_token) {
             try {
@@ -348,7 +376,8 @@ export const createPublicAppointment = async (req, res) => {
                 return res.status(201).json({ 
                     message: "Turno reservado, pendiente de pago", 
                     data: newAppointment, 
-                    init_point: prefData.init_point 
+                    init_point: prefData.init_point,
+                    ...authData
                 });
             } catch (mpError) {
                 console.error("MercadoPago Error:", mpError);
@@ -357,11 +386,11 @@ export const createPublicAppointment = async (req, res) => {
                 const appointmentRepo = AppDataSource.getRepository('Appointment');
                 newAppointment.estado = 'pendiente';
                 await appointmentRepo.save(newAppointment);
-                return res.status(201).json({ message: "Turno reservado (Hubo un error con el pago online)", data: newAppointment });
+                return res.status(201).json({ message: "Turno reservado (Hubo un error con el pago online)", data: newAppointment, ...authData });
             }
         }
 
-        res.status(201).json({ message: "Turno reservado exitosamente", data: newAppointment });
+        res.status(201).json({ message: "Turno reservado exitosamente", data: newAppointment, ...authData });
     } catch (error) {
         if (error.message === "PROFESSIONAL_NOT_FOUND") return res.status(404).json({ message: "Professional not found" });
         if (error.message === "PATIENT_BANNED") return res.status(403).json({ message: "Debe esperar una semana para poder sacar turno debido a reiteradas inasistencias." });
