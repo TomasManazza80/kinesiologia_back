@@ -106,16 +106,11 @@ export async function updateUser(id, updateData) {
 
 export async function deleteUser(id) {
     const userRepo = getUserRepo();
-    const user = await userRepo.findOne({
+    await userRepo.update(id, { is_active: false });
+    
+    return userRepo.findOne({
         where: { id: parseInt(id) }
     });
-
-    if (!user) return null;
-
-    user.is_active = false;
-    await userRepo.save(user);
-    
-    return user;
 }
 
 export async function verifyUserPassword(userId, password) {

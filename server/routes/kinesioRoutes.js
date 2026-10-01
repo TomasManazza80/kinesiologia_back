@@ -9,8 +9,15 @@ import * as availabilityController from '../controllers/availabilityController.j
 import * as mpAuthController from '../controllers/mpAuthController.js';
 import * as transactionController from '../controllers/transactionController.js';
 import * as specialtyController from '../controllers/specialtyController.js';
+import * as taskController from '../controllers/taskController.js';
 
 const router = express.Router();
+
+// Tareas
+router.get('/tasks', authenticateToken, taskController.getTasks);
+router.post('/tasks', authenticateToken, taskController.createTask);
+router.put('/tasks/:id', authenticateToken, taskController.updateTask);
+router.delete('/tasks/:id', authenticateToken, taskController.deleteTask);
 
 // Profesionales
 router.get('/professionals', authenticateToken, userController.getProfessionals);
