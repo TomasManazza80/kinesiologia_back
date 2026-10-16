@@ -56,10 +56,14 @@ export async function deleteUser(req, res) {
 // ADMIN ENDPOINTS
 
 export async function getAllUsers(req, res) {
+    if (req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: "No tienes permiso para ver usuarios" });
+    }
     try {
         const users = await userService.getAllUsers();
         res.status(200).json({ data: users });
     } catch (error) {
+        console.error("Error in getAllUsers:", error);
         res.status(500).json({ message: "Error getting users" });
     }
 }
@@ -114,6 +118,9 @@ export async function adminDeleteUser(req, res) {
 }
 
 export async function updateUserRole(req, res) {
+    if (req.user.role !== 'ADMIN') {
+        return res.status(403).json({ message: "No tienes permiso para actualizar roles" });
+    }
     const { id } = req.params;
     const { role } = req.body;
     
@@ -125,6 +132,7 @@ export async function updateUserRole(req, res) {
         const updatedUser = await userService.updateUserRole(parseInt(id), role);
         res.status(200).json({ message: "User role updated", data: updatedUser });
     } catch (error) {
+        console.error("Error updating user role:", error);
         res.status(500).json({ message: "Error updating user role" });
     }
 }

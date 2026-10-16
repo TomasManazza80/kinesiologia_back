@@ -116,10 +116,18 @@ export async function getAppointments(req, res) {
     
     let whereClause = {};
     
-    // Filtrar estrictamente por el profesional logueado
     if (!req.user) req.user = { userId: 1, role: 'ADMIN' };
-    whereClause.professional = { id: req.user.userId };
-
+    
+    if (['ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+      if (professional_id && professional_id !== 'all') {
+        whereClause.professional = { id: parseInt(professional_id) };
+      } else if (req.user.role === 'EMPLOYEE' && !professional_id) {
+        whereClause.professional = { id: req.user.userId };
+      }
+      // If ADMIN and no professional_id (or 'all'), do not filter by professional so all appointments are returned
+    } else {
+      whereClause.professional = { id: req.user.userId };
+    }
 
     if (patient_id) {
         whereClause.patient = { id: parseInt(patient_id) };
@@ -147,7 +155,10 @@ export async function updateAppointment(req, res) {
     const { estado, fecha_hora, motivo } = req.body;
     const appointmentRepo = AppDataSource.getRepository('Appointment');
 
-    let whereClause = { id: parseInt(id), professional: { id: req.user.userId } };
+    let whereClause = { id: parseInt(id) };
+    if (!['ADMIN', 'EMPLOYEE'].includes(req.user?.role)) {
+      whereClause.professional = { id: req.user.userId };
+    }
 
     const appointment = await appointmentRepo.findOne({
       where: whereClause
@@ -176,7 +187,10 @@ export async function deleteAppointment(req, res) {
     const { id } = req.params;
     const appointmentRepo = AppDataSource.getRepository('Appointment');
 
-    let whereClause = { id: parseInt(id), professional: { id: req.user.userId } };
+    let whereClause = { id: parseInt(id) };
+    if (!['ADMIN', 'EMPLOYEE'].includes(req.user?.role)) {
+      whereClause.professional = { id: req.user.userId };
+    }
 
     const appointment = await appointmentRepo.findOne({
       where: whereClause

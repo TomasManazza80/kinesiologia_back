@@ -16,6 +16,7 @@ export const PatientSchema = new EntitySchema({
     blood_type: { type: 'varchar', nullable: true },
     gender: { type: 'varchar', nullable: true },
     status: { type: 'varchar', nullable: true },
+    is_pauses: { type: 'boolean', default: false, nullable: true },
     absence_streak: { type: 'int', default: 0 },
     ban_until: { type: 'timestamp', nullable: true }
   },

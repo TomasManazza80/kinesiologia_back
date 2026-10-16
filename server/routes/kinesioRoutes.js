@@ -25,6 +25,12 @@ router.post('/professionals', authenticateToken, userController.adminCreateUser)
 router.put('/professionals/:id', authenticateToken, userController.adminUpdateUser);
 router.delete('/professionals/:id', authenticateToken, userController.adminDeleteUser);
 
+// Usuarios (Normales / Todos)
+router.get('/users', authenticateToken, userController.getAllUsers);
+router.patch('/users/:id/role', authenticateToken, userController.updateUserRole);
+router.put('/users/:id', authenticateToken, userController.adminUpdateUser);
+router.delete('/users/:id', authenticateToken, userController.adminDeleteUser);
+
 // Especialidades
 router.get('/specialties', authenticateToken, specialtyController.getSpecialties);
 router.post('/specialties', authenticateToken, specialtyController.createSpecialty);

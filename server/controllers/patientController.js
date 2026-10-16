@@ -2,15 +2,21 @@ import { AppDataSource } from '../database.js';
 
 export const createPatient = async (req, res) => {
   try {
-    const { nombre, dni, datos_contacto, fecha_nacimiento, professionalIds } = req.body;
+    const { nombre, dni, datos_contacto, fecha_nacimiento, professionalIds, is_pauses, gender, blood_type, status } = req.body;
     const professionalId = req.user.userId;
 
     const patientRepo = AppDataSource.getRepository('Patient');
+    const isPausesBool = is_pauses === true || is_pauses === 'true' || is_pauses === 'pauses';
     const newPatient = patientRepo.create({
       nombre,
       dni,
       datos_contacto,
       fecha_nacimiento,
+      gender,
+      blood_type,
+      status,
+      is_pauses: isPausesBool,
+      admissionData: { ...(req.body.admissionData || {}), is_pauses: isPausesBool },
       professionals: [{ id: professionalId }]
     });
 
@@ -91,6 +97,15 @@ export const updatePatient = async (req, res) => {
     }
 
     const { professionalIds, ...restData } = updateData;
+    if ('is_pauses' in restData) {
+      const isPausesBool = restData.is_pauses === true || restData.is_pauses === 'true' || restData.is_pauses === 'pauses';
+      restData.is_pauses = isPausesBool;
+      restData.admissionData = {
+        ...(patient.admissionData || {}),
+        ...(restData.admissionData || {}),
+        is_pauses: isPausesBool
+      };
+    }
     patientRepo.merge(patient, restData);
     
     await patientRepo.save(patient);

@@ -7,7 +7,11 @@ function getUserRepo() {
 
 export async function getAllUsers() {
     return getUserRepo().find({
-        select: { id: true, email: true, name: true, role: true, specialty: true, createdAt: true, updatedAt: true, is_active: true }
+        select: { 
+            id: true, email: true, name: true, role: true, specialty: true, 
+            profile_picture: true, is_public: true, createdAt: true, updatedAt: true, is_active: true 
+        },
+        order: { createdAt: 'DESC' }
     });
 }
 
@@ -15,8 +19,7 @@ export async function getProfessionals() {
     return getUserRepo().find({
         where: [
             { role: 'EMPLOYEE' },
-            { role: 'ADMIN' },
-            { role: 'USER' }
+            { role: 'ADMIN' }
         ],
         relations: { patients: true },
         select: { 
