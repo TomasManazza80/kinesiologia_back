@@ -46,14 +46,15 @@ export const createPatient = async (req, res) => {
 export const getPatients = async (req, res) => {
   try {
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     const patientRepo = AppDataSource.getRepository('Patient');
 
     let query = patientRepo.createQueryBuilder('patient')
       .leftJoinAndSelect('patient.professionals', 'allProfessionals')
       .leftJoin('patient.professionals', 'filterProf')
       .where(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patients = await query
@@ -78,8 +79,8 @@ export const getPatientById = async (req, res) => {
       .leftJoin('patient.professionals', 'filterProf')
       .where('patient.id = :id', { id: parseInt(id) })
       .andWhere(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patient = await query.getOne();
@@ -98,6 +99,7 @@ export const updatePatient = async (req, res) => {
   try {
     const { id } = req.params;
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     const updateData = req.body;
     const patientRepo = AppDataSource.getRepository('Patient');
 
@@ -106,8 +108,8 @@ export const updatePatient = async (req, res) => {
       .leftJoin('patient.professionals', 'filterProf')
       .where('patient.id = :id', { id: parseInt(id) })
       .andWhere(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patient = await query.getOne();
@@ -151,8 +153,8 @@ export const deletePatient = async (req, res) => {
       .leftJoin('patient.professionals', 'filterProf')
       .where('patient.id = :id', { id: parseInt(id) })
       .andWhere(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patient = await query.getOne();
@@ -173,6 +175,7 @@ export const sharePatient = async (req, res) => {
     const { id } = req.params;
     const { targetProfessionalIds } = req.body;
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     const patientRepo = AppDataSource.getRepository('Patient');
 
     let query = patientRepo.createQueryBuilder('patient')
@@ -180,8 +183,8 @@ export const sharePatient = async (req, res) => {
       .leftJoin('patient.professionals', 'filterProf')
       .where('patient.id = :id', { id: parseInt(id) })
       .andWhere(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patient = await query.getOne();

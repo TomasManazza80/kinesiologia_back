@@ -4,18 +4,17 @@ export const createHistoryEntry = async (req, res) => {
   try {
     const { patient_id, fecha, reason_for_visit, blood_pressure, heart_rate, physical_findings, diagnostico, tratamiento, archivos_adjuntos } = req.body;
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     
     const patientRepo = AppDataSource.getRepository('Patient');
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
-
-
 
     let query = patientRepo.createQueryBuilder('patient')
       .leftJoin('patient.professionals', 'filterProf')
       .where('patient.id = :id', { id: parseInt(patient_id) })
       .andWhere(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patient = await query.getOne();
@@ -48,6 +47,7 @@ export const getHistoryByPatient = async (req, res) => {
   try {
     const { patient_id } = req.params;
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     
     const patientRepo = AppDataSource.getRepository('Patient');
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
@@ -56,8 +56,8 @@ export const getHistoryByPatient = async (req, res) => {
       .leftJoin('patient.professionals', 'filterProf')
       .where('patient.id = :id', { id: parseInt(patient_id) })
       .andWhere(
-        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
-        { professionalId }
+        '(:isAdmin = true OR patient.is_pauses = true OR patient."admissionData"->>\'is_pauses\' = \'true\' OR patient."admissionData"->>\'is_pauses\' = \'pauses\' OR filterProf.id = :professionalId)',
+        { professionalId, isAdmin }
       );
 
     const patient = await query.getOne();
