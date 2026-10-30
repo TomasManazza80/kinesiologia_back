@@ -16,6 +16,10 @@ export const AppointmentSchema = new EntitySchema({
     payment_id: { type: 'varchar', nullable: true },
     cancel_reason: { type: 'varchar', nullable: true },
     is_read: { type: 'boolean', default: false, nullable: true },
+    patient_name: { type: 'varchar', nullable: true },
+    patient_dni: { type: 'varchar', nullable: true },
+    patient_phone: { type: 'varchar', nullable: true },
+    patient_email: { type: 'varchar', nullable: true },
   },
   relations: {
     professional: {
@@ -28,8 +32,8 @@ export const AppointmentSchema = new EntitySchema({
       target: 'Patient',
       type: 'many-to-one',
       joinColumn: { name: 'patient_id' },
-      nullable: false,
-      onDelete: 'CASCADE'
+      nullable: true,
+      onDelete: 'SET NULL'
     }
   }
 });

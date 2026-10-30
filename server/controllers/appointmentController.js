@@ -73,7 +73,11 @@ export async function createAppointment(req, res) {
           professional: { id: professionalId },
           fecha_hora: fechaHoraParsed,
           end_time: endTimeParsed,
-          motivo
+          motivo,
+          patient_name: patient.nombre,
+          patient_dni: patient.dni,
+          patient_phone: patient.datos_contacto?.telefono || patient.datos_contacto?.phone,
+          patient_email: patient.email
         });
 
         await appointmentRepo.save(newAppointment);
@@ -113,20 +117,24 @@ export async function getAppointments(req, res) {
   try {
     const { start_date, end_date, professional_id, patient_id } = req.query;
     const appointmentRepo = AppDataSource.getRepository('Appointment');
+    const userRepo = AppDataSource.getRepository('User');
     
     let whereClause = {};
     
     if (!req.user) req.user = { userId: 1, role: 'ADMIN' };
     
-    if (['ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+    const currentUser = await userRepo.findOne({ where: { id: req.user.userId } });
+    const isProfessional = currentUser?.is_public === true || 
+                           (Array.isArray(currentUser?.specialty) && currentUser.specialty.length > 0) || 
+                           !['ADMIN'].includes(req.user.role);
+
+    if (isProfessional) {
+      // Professionals can ONLY see their own appointments to ensure patient privacy
+      whereClause.professional = { id: req.user.userId };
+    } else {
       if (professional_id && professional_id !== 'all') {
         whereClause.professional = { id: parseInt(professional_id) };
-      } else if (req.user.role === 'EMPLOYEE' && !professional_id) {
-        whereClause.professional = { id: req.user.userId };
       }
-      // If ADMIN and no professional_id (or 'all'), do not filter by professional so all appointments are returned
-    } else {
-      whereClause.professional = { id: req.user.userId };
     }
 
     if (patient_id) {
@@ -154,9 +162,15 @@ export async function updateAppointment(req, res) {
     const { id } = req.params;
     const { estado, fecha_hora, motivo } = req.body;
     const appointmentRepo = AppDataSource.getRepository('Appointment');
+    const userRepo = AppDataSource.getRepository('User');
 
     let whereClause = { id: parseInt(id) };
-    if (!['ADMIN', 'EMPLOYEE'].includes(req.user?.role)) {
+    const currentUser = await userRepo.findOne({ where: { id: req.user?.userId } });
+    const isProfessional = currentUser?.is_public === true || 
+                           (Array.isArray(currentUser?.specialty) && currentUser.specialty.length > 0) || 
+                           !['ADMIN'].includes(req.user?.role);
+
+    if (isProfessional) {
       whereClause.professional = { id: req.user.userId };
     }
 
@@ -186,9 +200,15 @@ export async function deleteAppointment(req, res) {
   try {
     const { id } = req.params;
     const appointmentRepo = AppDataSource.getRepository('Appointment');
+    const userRepo = AppDataSource.getRepository('User');
 
     let whereClause = { id: parseInt(id) };
-    if (!['ADMIN', 'EMPLOYEE'].includes(req.user?.role)) {
+    const currentUser = await userRepo.findOne({ where: { id: req.user?.userId } });
+    const isProfessional = currentUser?.is_public === true || 
+                           (Array.isArray(currentUser?.specialty) && currentUser.specialty.length > 0) || 
+                           !['ADMIN'].includes(req.user?.role);
+
+    if (isProfessional) {
       whereClause.professional = { id: req.user.userId };
     }
 
@@ -216,9 +236,12 @@ export async function getMyPatientAppointments(req, res) {
 
     const appointmentRepo = AppDataSource.getRepository('Appointment');
     
-    // Find appointments where the patient's email matches the logged-in user's email
+    // Find appointments where the patient's email matches the logged-in user's email OR patient_email matches
     const appointments = await appointmentRepo.find({
-      where: { patient: { email: userEmail } },
+      where: [
+        { patient: { email: userEmail } },
+        { patient_email: userEmail }
+      ],
       order: { fecha_hora: 'DESC' },
       relations: { patient: true, professional: true } // Need professional to show who the appointment is with
     });
@@ -236,22 +259,33 @@ export async function cancelAppointment(req, res) {
     
     const appointmentRepo = AppDataSource.getRepository('Appointment');
     const patientRepo = AppDataSource.getRepository('Patient');
+    const userRepo = AppDataSource.getRepository('User');
 
-    let whereClause = { id: parseInt(id) };
+    let appointment = null;
+    const currentUser = await userRepo.findOne({ where: { id: req.user?.userId } });
+    const isProfessional = currentUser?.is_public === true || 
+                           (Array.isArray(currentUser?.specialty) && currentUser.specialty.length > 0) || 
+                           !['ADMIN'].includes(req.user?.role);
     
-    // Si no es admin/employee, puede ser un profesional o un paciente (USER)
-    if (!['ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-      if (req.user.role === 'USER') {
-        whereClause.patient = { email: req.user.email };
-      } else {
-        whereClause.professional = { id: req.user.userId };
-      }
+    if (isProfessional) {
+      appointment = await appointmentRepo.findOne({
+        where: { id: parseInt(id), professional: { id: req.user.userId } },
+        relations: { patient: true }
+      });
+    } else if (req.user.role === 'USER') {
+      appointment = await appointmentRepo.findOne({
+        where: [
+          { id: parseInt(id), patient: { email: req.user.email } },
+          { id: parseInt(id), patient_email: req.user.email }
+        ],
+        relations: { patient: true }
+      });
+    } else {
+      appointment = await appointmentRepo.findOne({
+        where: { id: parseInt(id) },
+        relations: { patient: true }
+      });
     }
-
-    const appointment = await appointmentRepo.findOne({
-      where: whereClause,
-      relations: { patient: true }
-    });
 
     if (!appointment) {
       return res.status(403).json({ error: 'Forbidden: El turno no existe o no tienes permisos para cancelarlo.' });
@@ -300,15 +334,11 @@ export async function notifyAppointment(req, res) {
 
     let { patient, professional } = appointment;
 
-    if (!patient) {
-      return res.status(400).json({ error: 'El turno no tiene un paciente asignado' });
-    }
-
     if (!professional) {
       return res.status(400).json({ error: 'El turno no tiene un profesional asignado' });
     }
 
-    let datosContacto = patient.datos_contacto;
+    let datosContacto = patient?.datos_contacto;
     if (typeof datosContacto === 'string') {
       try {
         datosContacto = JSON.parse(datosContacto);
@@ -317,9 +347,12 @@ export async function notifyAppointment(req, res) {
       }
     }
 
-    if (!datosContacto?.telefono && !datosContacto?.phone) {
-        return res.status(400).json({ error: 'El paciente no tiene un número de teléfono registrado' });
+    const phone = datosContacto?.telefono || datosContacto?.phone || appointment.patient_phone;
+    if (!phone) {
+      return res.status(400).json({ error: 'El paciente no tiene un número de teléfono registrado' });
     }
+
+    const patientName = patient?.nombre || appointment.patient_name || 'Paciente';
 
     const prof = await userRepo.findOne({ where: { id: professional.id } });
 
@@ -332,13 +365,11 @@ export async function notifyAppointment(req, res) {
     const aptDate = new Date(appointment.fecha_hora);
     const isValidDate = isValid(aptDate);
 
-    msg = msg.replace(/{{patient_name}}/g, patient.nombre || '');
+    msg = msg.replace(/{{patient_name}}/g, patientName);
     msg = msg.replace(/{{date}}/g, isValidDate ? format(aptDate, "dd 'de' MMMM", { locale: es }) : 'N/A');
     msg = msg.replace(/{{time}}/g, isValidDate ? format(aptDate, 'HH:mm') : 'N/A');
     msg = msg.replace(/{{service}}/g, appointment.motivo || 'Turno');
     msg = msg.replace(/{{professional_name}}/g, prof.name || '');
-
-    const phone = datosContacto?.telefono || datosContacto?.phone;
     
     whatsappService.sendMessage(prof.id, phone, msg);
 

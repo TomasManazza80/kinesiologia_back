@@ -10,17 +10,18 @@ export const createHistoryEntry = async (req, res) => {
 
 
 
-    let whereClause = { id: parseInt(patient_id) };
-    if (req.user.role !== 'ADMIN') {
-        whereClause.professionals = { id: professionalId };
-    }
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where('patient.id = :id', { id: parseInt(patient_id) })
+      .andWhere(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
 
-    const patient = await patientRepo.findOne({
-      where: whereClause
-    });
+    const patient = await query.getOne();
 
     if (!patient) {
-      return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece.' });
+      return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece o no tienes acceso a él.' });
     }
 
     const newEntry = historyRepo.create({
@@ -51,28 +52,22 @@ export const getHistoryByPatient = async (req, res) => {
     const patientRepo = AppDataSource.getRepository('Patient');
     const historyRepo = AppDataSource.getRepository('MedicalHistory');
 
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where('patient.id = :id', { id: parseInt(patient_id) })
+      .andWhere(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
 
-
-    let whereClause = { id: parseInt(patient_id) };
-    if (req.user.role !== 'ADMIN') {
-        whereClause.professionals = { id: professionalId };
-    }
-
-    const patient = await patientRepo.findOne({
-      where: whereClause
-    });
+    const patient = await query.getOne();
 
     if (!patient) {
-      return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece.' });
-    }
-
-    let historyWhereClause = { patient: { id: parseInt(patient_id) } };
-    if (req.user.role !== 'ADMIN') {
-        historyWhereClause.professional = { id: professionalId };
+      return res.status(403).json({ error: 'Forbidden: El paciente no te pertenece o no tienes acceso a él.' });
     }
 
     const history = await historyRepo.find({
-      where: historyWhereClause,
+      where: { patient: { id: parseInt(patient_id) } },
       order: { createdAt: 'DESC' }
     });
 

@@ -40,7 +40,7 @@ export const getAvailableSlots = async (req, res) => {
             return res.status(400).json({ message: "date or (start_date and end_date) are required" });
         }
 
-        const profId = professional_id;
+        const profId = parseInt(professional_id, 10);
         const availabilityRepo = AppDataSource.getRepository('Availability');
         const appointmentRepo = AppDataSource.getRepository('Appointment');
         const daysMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -90,10 +90,16 @@ export const getAvailableSlots = async (req, res) => {
             const currentDateStr = current.format('YYYY-MM-DD');
             const dayOfWeek = daysMap[current.day()];
             
-            const dayAvailabilities = allAvailabilities.filter(a => 
-                (a.is_exception === false && a.day_of_week === dayOfWeek) ||
-                (a.is_exception === true && moment(a.exception_date).format('YYYY-MM-DD') === currentDateStr)
-            );
+            const dayAvailabilities = allAvailabilities.filter(a => {
+                if (a.is_exception === false && a.day_of_week === dayOfWeek) return true;
+                if (a.is_exception === true && a.exception_date) {
+                    const excDateStr = a.exception_date instanceof Date
+                        ? a.exception_date.toISOString().slice(0, 10)
+                        : (typeof a.exception_date === 'string' ? a.exception_date.slice(0, 10) : moment.utc(a.exception_date).format('YYYY-MM-DD'));
+                    return excDateStr === currentDateStr;
+                }
+                return false;
+            });
 
             const exception = dayAvailabilities.find(a => a.is_exception);
             if (exception && !exception.start_time) {
@@ -194,54 +200,34 @@ export const createPublicAppointment = async (req, res) => {
             }
             const endTime = moment(fechaHora).add(duration, 'minutes').toISOString();
 
-            // Check if patient exists by DNI or name
-            let patient = await patientRepo.findOne({
-                where: [
-                    { dni: patient_dni },
-                    { nombre: patient_name }
-                ],
-                relations: { professionals: true }
-            });
-
-            if (!patient) {
-                patient = patientRepo.create({
-                    nombre: patient_name,
-                    dni: patient_dni,
-                    email: patient_email,
-                    datos_contacto: { telefono: patient_phone, email: patient_email },
-                    professionals: [{ id: profId }],
-                    status: 'activo',
-                    is_pauses: true,
-                    absence_streak: 0
+            // Check if patient already exists in the system (registered by admin)
+            let existingPatient = null;
+            if (patient_dni) {
+                existingPatient = await patientRepo.findOne({
+                    where: { dni: patient_dni },
+                    relations: { professionals: true }
                 });
-                patient = await patientRepo.save(patient);
-            } else {
-                // Asegurar que el profesional está vinculado al paciente
-                const hasProf = (patient.professionals || []).some(p => p.id === profId);
+            }
+            if (!existingPatient && patient_name) {
+                existingPatient = await patientRepo.findOne({
+                    where: { nombre: patient_name },
+                    relations: { professionals: true }
+                });
+            }
+
+            if (existingPatient) {
+                // Asegurar que el profesional está vinculado al paciente si ya existía
+                const hasProf = (existingPatient.professionals || []).some(p => p.id === profId);
                 if (!hasProf) {
-                    patient.professionals = [...(patient.professionals || []), { id: profId }];
+                    existingPatient.professionals = [...(existingPatient.professionals || []), { id: profId }];
+                    await patientRepo.save(existingPatient);
                 }
-                // Actualizar DNI o datos de contacto si faltan
-                if (!patient.dni && patient_dni) {
-                    patient.dni = patient_dni;
-                }
-                if (patient_phone || patient_email) {
-                    patient.datos_contacto = {
-                        telefono: patient_phone || patient.datos_contacto?.telefono || patient.datos_contacto?.phone,
-                        email: patient_email || patient.datos_contacto?.email || patient.email
-                    };
-                }
-                if (!patient.email && patient_email) {
-                    patient.email = patient_email;
-                }
-                patient.is_pauses = true;
                 // Verificar si el paciente está sancionado por inasistencias
-                if (patient.ban_until && moment(patient.ban_until).isAfter(moment())) {
+                if (existingPatient.ban_until && moment(existingPatient.ban_until).isAfter(moment())) {
                     throw new Error("PATIENT_BANNED");
                 }
-                await patientRepo.save(patient);
             }
-            finalPatient = patient;
+            finalPatient = existingPatient;
 
             if (prof.require_payment && prof.session_fee > 0 && !prof.mp_access_token) {
                 throw new Error("PAYMENT_REQUIRED_NO_TOKEN");
@@ -285,13 +271,17 @@ export const createPublicAppointment = async (req, res) => {
             }
 
             newAppointment = appointmentRepo.create({
-                patient: { id: patient.id },
+                patient: existingPatient ? { id: existingPatient.id } : null,
                 professional: { id: profId },
                 fecha_hora: fechaHora,
                 end_time: endTime,
                 motivo: service,
                 estado: (prof.require_payment && prof.session_fee > 0 && prof.mp_access_token) ? 'pendiente_pago' : 'confirmado',
-                is_read: false
+                is_read: false,
+                patient_name: patient_name,
+                patient_dni: patient_dni,
+                patient_phone: patient_phone,
+                patient_email: patient_email
             });
 
             await appointmentRepo.save(newAppointment);
@@ -301,7 +291,7 @@ export const createPublicAppointment = async (req, res) => {
         if (patient_phone) {
             if (finalProf?.whatsapp_connected) {
                 let msg = finalProf.whatsapp_message_template || "Hola {{patient_name}}, somos del equipo de PAUSES. Te confirmamos tu turno de {{service}} con {{professional_name}} para el día {{date}} a las {{time}} hs.\n\nTe esperamos. En caso de no poder asistir, por favor avisar con al menos 1 hora de anticipación. ¡Muchas gracias!";
-                msg = msg.replace(/{{patient_name}}/g, finalPatient.nombre || '');
+                msg = msg.replace(/{{patient_name}}/g, patient_name || '');
                 const dateObj = moment(fechaHora).tz('America/Argentina/Buenos_Aires');
                 dateObj.locale('es');
                 msg = msg.replace(/{{date}}/g, dateObj.format('DD [de] MMMM'));
@@ -417,7 +407,7 @@ export const handleMercadoPagoWebhook = async (req, res) => {
                             const transactionRepo = AppDataSource.getRepository('Transaction');
                             const newTransaction = transactionRepo.create({
                                 title: `Reserva - ${appointment.motivo || 'Turno'}`,
-                                subtitle: appointment.patient ? appointment.patient.nombre : 'Pago Online',
+                                subtitle: appointment.patient ? appointment.patient.nombre : (appointment.patient_name || 'Pago Online'),
                                 amount: Number(paymentInfo.transaction_amount) || Number(prof.session_fee),
                                 type: 'income',
                                 category: 'MP_PAYMENT',

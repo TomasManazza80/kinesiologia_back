@@ -2,11 +2,27 @@ import { AppDataSource } from '../database.js';
 
 export const createPatient = async (req, res) => {
   try {
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Solo un administrador puede crear un paciente.' });
+    }
+
     const { nombre, dni, datos_contacto, fecha_nacimiento, professionalIds, is_pauses, gender, blood_type, status } = req.body;
     const professionalId = req.user.userId;
 
     const patientRepo = AppDataSource.getRepository('Patient');
     const isPausesBool = is_pauses === true || is_pauses === 'true' || is_pauses === 'pauses';
+    
+    let assignedProfessionals = [];
+    if (Array.isArray(professionalIds) && professionalIds.length > 0) {
+      const validIds = Array.from(new Set(professionalIds.map(id => parseInt(id)).filter(id => !isNaN(id))));
+      if (validIds.length > 0) {
+        assignedProfessionals = validIds.map(id => ({ id }));
+      }
+    }
+    if (assignedProfessionals.length === 0) {
+      assignedProfessionals = [{ id: professionalId }];
+    }
+
     const newPatient = patientRepo.create({
       nombre,
       dni,
@@ -17,7 +33,7 @@ export const createPatient = async (req, res) => {
       status,
       is_pauses: isPausesBool,
       admissionData: { ...(req.body.admissionData || {}), is_pauses: isPausesBool },
-      professionals: [{ id: professionalId }]
+      professionals: assignedProfessionals
     });
 
     await patientRepo.save(newPatient);
@@ -31,17 +47,18 @@ export const getPatients = async (req, res) => {
   try {
     const professionalId = req.user.userId;
     const patientRepo = AppDataSource.getRepository('Patient');
-    
-    let whereClause = {};
-    if (req.user.role !== 'ADMIN') {
-        whereClause = { professionals: { id: professionalId } };
-    }
 
-    const patients = await patientRepo.find({
-      where: whereClause,
-      relations: { professionals: true },
-      order: { createdAt: 'DESC' }
-    });
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.professionals', 'allProfessionals')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
+
+    const patients = await query
+      .orderBy('patient.createdAt', 'DESC')
+      .getMany();
 
     res.json(patients);
   } catch (error) {
@@ -53,20 +70,22 @@ export const getPatientById = async (req, res) => {
   try {
     const { id } = req.params;
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     const patientRepo = AppDataSource.getRepository('Patient');
 
-    let whereClause = { id: parseInt(id) };
-    if (req.user.role !== 'ADMIN') {
-        whereClause.professionals = { id: professionalId };
-    }
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.professionals', 'allProfessionals')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where('patient.id = :id', { id: parseInt(id) })
+      .andWhere(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
 
-    const patient = await patientRepo.findOne({
-      where: whereClause,
-      relations: { professionals: true }
-    });
+    const patient = await query.getOne();
 
     if (!patient) {
-      return res.status(403).json({ error: 'Forbidden: El paciente no existe o no te pertenece.' });
+      return res.status(403).json({ error: 'Forbidden: El paciente no existe o no tienes permisos para acceder a él.' });
     }
 
     res.json(patient);
@@ -82,15 +101,16 @@ export const updatePatient = async (req, res) => {
     const updateData = req.body;
     const patientRepo = AppDataSource.getRepository('Patient');
 
-    let whereClause = { id: parseInt(id) };
-    if (req.user.role !== 'ADMIN') {
-        whereClause.professionals = { id: professionalId };
-    }
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.professionals', 'allProfessionals')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where('patient.id = :id', { id: parseInt(id) })
+      .andWhere(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
 
-    const patient = await patientRepo.findOne({
-      where: whereClause,
-      relations: { professionals: true }
-    });
+    const patient = await query.getOne();
 
     if (!patient) {
       return res.status(403).json({ error: 'Forbidden: El paciente no existe o no tienes permisos para editarlo.' });
@@ -108,6 +128,11 @@ export const updatePatient = async (req, res) => {
     }
     patientRepo.merge(patient, restData);
     
+    if (Array.isArray(professionalIds)) {
+      const validIds = Array.from(new Set(professionalIds.map(id => parseInt(id)).filter(id => !isNaN(id))));
+      patient.professionals = validIds.map(id => ({ id }));
+    }
+    
     await patientRepo.save(patient);
     res.json(patient);
   } catch (error) {
@@ -119,16 +144,18 @@ export const deletePatient = async (req, res) => {
   try {
     const { id } = req.params;
     const professionalId = req.user.userId;
+    const isAdmin = req.user.role === 'ADMIN';
     const patientRepo = AppDataSource.getRepository('Patient');
 
-    let whereClause = { id: parseInt(id) };
-    if (req.user.role !== 'ADMIN') {
-        whereClause.professionals = { id: professionalId };
-    }
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where('patient.id = :id', { id: parseInt(id) })
+      .andWhere(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
 
-    const patient = await patientRepo.findOne({
-      where: whereClause
-    });
+    const patient = await query.getOne();
 
     if (!patient) {
       return res.status(403).json({ error: 'Forbidden: El paciente no existe o no tienes permisos para eliminarlo.' });
@@ -148,15 +175,16 @@ export const sharePatient = async (req, res) => {
     const professionalId = req.user.userId;
     const patientRepo = AppDataSource.getRepository('Patient');
 
-    let whereClause = { id: parseInt(id) };
-    if (req.user.role !== 'ADMIN') {
-        whereClause.professionals = { id: professionalId };
-    }
+    let query = patientRepo.createQueryBuilder('patient')
+      .leftJoinAndSelect('patient.professionals', 'allProfessionals')
+      .leftJoin('patient.professionals', 'filterProf')
+      .where('patient.id = :id', { id: parseInt(id) })
+      .andWhere(
+        '(patient.is_pauses = true OR (patient.admissionData->>\'is_pauses\')::boolean = true OR filterProf.id = :professionalId)',
+        { professionalId }
+      );
 
-    const patient = await patientRepo.findOne({
-      where: whereClause,
-      relations: { professionals: true }
-    });
+    const patient = await query.getOne();
 
     if (!patient) {
       return res.status(403).json({ error: 'El paciente no existe o no tienes acceso a él.' });

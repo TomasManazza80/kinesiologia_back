@@ -69,11 +69,14 @@ export async function getAllUsers(req, res) {
 }
 
 export async function adminCreateUser(req, res) {
-    if (req.user.role !== 'ADMIN') {
+    if (!['ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
         return res.status(403).json({ message: "No tienes permiso para crear usuarios" });
     }
     try {
-        const newUser = await userService.createUser(req.body);
+        const newUser = await userService.createUser({
+            ...req.body,
+            role: req.body.role || 'ADMIN'
+        });
         res.status(201).json({ message: "User created successfully", data: newUser });
     } catch (error) {
         if (error.code === '23505') {
